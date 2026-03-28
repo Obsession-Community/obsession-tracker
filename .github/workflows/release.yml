@@ -1,0 +1,199 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  build-android:
+    name: Build Android APK
+    runs-on: macos-latest
+    timeout-minutes: 45
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Java
+      uses: actions/setup-java@v5
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        channel: 'stable'
+        cache: true
+
+    - name: Generate Firebase config placeholders
+      run: |
+        cp lib/firebase_options.dart.example lib/firebase_options.dart
+        mkdir -p android/app/src
+        cat > android/app/google-services.json << 'GSEOF'
+        {"project_info":{"project_number":"000000000000","project_id":"placeholder","storage_bucket":"placeholder.appspot.com"},"client":[{"client_info":{"mobilesdk_app_id":"1:000000000000:android:0000000000000000","android_client_info":{"package_name":"com.obsessiontracker.app"}},"api_key":[{"current_key":"placeholder"}]}],"configuration_version":"1"}
+        GSEOF
+        mkdir -p ios/Runner
+        cat > ios/Runner/GoogleService-Info.plist << 'GIEOF'
+        <?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        <plist version="1.0"><dict>
+        <key>API_KEY</key><string>placeholder</string>
+        <key>GCM_SENDER_ID</key><string>000000000000</string>
+        <key>PLIST_VERSION</key><string>1</string>
+        <key>BUNDLE_ID</key><string>com.obsessioncommunity.tracker</string>
+        <key>PROJECT_ID</key><string>placeholder</string>
+        <key>STORAGE_BUCKET</key><string>placeholder.appspot.com</string>
+        <key>IS_ADS_ENABLED</key><false/>
+        <key>IS_ANALYTICS_ENABLED</key><false/>
+        <key>IS_APPINVITE_ENABLED</key><false/>
+        <key>IS_GCM_ENABLED</key><true/>
+        <key>IS_SIGNIN_ENABLED</key><false/>
+        <key>GOOGLE_APP_ID</key><string>1:000000000000:ios:0000000000000000</string>
+        </dict></plist>
+        GIEOF
+
+    - name: Get dependencies
+      run: flutter pub get
+
+    - name: Run tests
+      run: flutter test
+
+    - name: Build release APK (unsigned — for source verification)
+      run: |
+        flutter build apk --release \
+          --dart-define=MAPBOX_ACCESS_TOKEN=${{ secrets.MAPBOX_ACCESS_TOKEN }} \
+          --dart-define=NPS_API_KEY=${{ secrets.NPS_API_KEY }} \
+          --dart-define=IOS_ANNUAL_PRODUCT_ID=${{ secrets.IOS_ANNUAL_PRODUCT_ID }} \
+          --dart-define=IOS_MONTHLY_PRODUCT_ID=${{ secrets.IOS_MONTHLY_PRODUCT_ID }}
+
+    - name: Generate checksums
+      run: |
+        cd build/app/outputs/flutter-apk/
+        sha256sum app-release.apk > SHA256SUMS.txt
+        cat SHA256SUMS.txt
+
+    - name: Upload APK artifact
+      uses: actions/upload-artifact@v7
+      with:
+        name: android-apk
+        path: |
+          build/app/outputs/flutter-apk/app-release.apk
+          build/app/outputs/flutter-apk/SHA256SUMS.txt
+
+  build-ios:
+    name: Build iOS (unsigned)
+    runs-on: macos-latest
+    timeout-minutes: 45
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        channel: 'stable'
+        cache: true
+
+    - name: Update CocoaPods repo
+      run: pod repo update
+
+    - name: Generate Firebase config placeholders
+      run: |
+        cp lib/firebase_options.dart.example lib/firebase_options.dart
+        mkdir -p android/app/src
+        cat > android/app/google-services.json << 'GSEOF'
+        {"project_info":{"project_number":"000000000000","project_id":"placeholder","storage_bucket":"placeholder.appspot.com"},"client":[{"client_info":{"mobilesdk_app_id":"1:000000000000:android:0000000000000000","android_client_info":{"package_name":"com.obsessiontracker.app"}},"api_key":[{"current_key":"placeholder"}]}],"configuration_version":"1"}
+        GSEOF
+        mkdir -p ios/Runner
+        cat > ios/Runner/GoogleService-Info.plist << 'GIEOF'
+        <?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        <plist version="1.0"><dict>
+        <key>API_KEY</key><string>placeholder</string>
+        <key>GCM_SENDER_ID</key><string>000000000000</string>
+        <key>PLIST_VERSION</key><string>1</string>
+        <key>BUNDLE_ID</key><string>com.obsessioncommunity.tracker</string>
+        <key>PROJECT_ID</key><string>placeholder</string>
+        <key>STORAGE_BUCKET</key><string>placeholder.appspot.com</string>
+        <key>IS_ADS_ENABLED</key><false/>
+        <key>IS_ANALYTICS_ENABLED</key><false/>
+        <key>IS_APPINVITE_ENABLED</key><false/>
+        <key>IS_GCM_ENABLED</key><true/>
+        <key>IS_SIGNIN_ENABLED</key><false/>
+        <key>GOOGLE_APP_ID</key><string>1:000000000000:ios:0000000000000000</string>
+        </dict></plist>
+        GIEOF
+
+    - name: Get dependencies
+      run: flutter pub get
+
+    - name: Build iOS (no codesign — for source verification)
+      run: |
+        flutter build ios --release --no-codesign \
+          --dart-define=MAPBOX_ACCESS_TOKEN=${{ secrets.MAPBOX_ACCESS_TOKEN }} \
+          --dart-define=NPS_API_KEY=${{ secrets.NPS_API_KEY }} \
+          --dart-define=IOS_ANNUAL_PRODUCT_ID=${{ secrets.IOS_ANNUAL_PRODUCT_ID }} \
+          --dart-define=IOS_MONTHLY_PRODUCT_ID=${{ secrets.IOS_MONTHLY_PRODUCT_ID }}
+
+  release:
+    name: Create GitHub Release
+    needs: [build-android, build-ios]
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Download APK artifact
+      uses: actions/download-artifact@v8
+      with:
+        name: android-apk
+        path: artifacts/
+
+    - name: Generate attestation for APK
+      continue-on-error: true
+      uses: actions/attest-build-provenance@v2
+      with:
+        subject-path: artifacts/app-release.apk
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        generate_release_notes: false
+        body: |
+          ## Obsession Tracker ${{ github.ref_name }}
+
+          ### Build Provenance
+          This release was built from source in a public GitHub Actions workflow.
+          Anyone can verify the build by:
+          1. Checking the [workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for this release
+          2. Cloning this repo at tag `${{ github.ref_name }}` and building locally
+          3. Comparing SHA-256 checksums below against your local build
+
+          ### Checksums (SHA-256)
+          See `SHA256SUMS.txt` in release assets.
+
+          ### Verification
+          ```bash
+          # Clone and build locally
+          git clone https://github.com/${{ github.repository }}.git
+          cd obsession-tracker
+          git checkout ${{ github.ref_name }}
+          cp lib/firebase_options.dart.example lib/firebase_options.dart
+          flutter build apk --release
+          sha256sum build/app/outputs/flutter-apk/app-release.apk
+          ```
+
+          > **Note:** The APK in this release is unsigned (not signed with the Play Store key).
+          > The Play Store version is signed locally via Fastlane. Source code is identical.
+        files: |
+          artifacts/app-release.apk
+          artifacts/SHA256SUMS.txt

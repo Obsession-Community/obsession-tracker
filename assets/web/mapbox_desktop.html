@@ -1,0 +1,1422 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Obsession Tracker Map</title>
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
+  <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet">
+  <style>
+    body { margin: 0; padding: 0; }
+    #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+
+    /* Center crosshair overlay - pointer-events: none ensures clicks pass through */
+    #center-crosshair {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 60px;
+      height: 60px;
+      pointer-events: none;
+      z-index: 1000;
+      display: none; /* Hidden by default, shown via JavaScript */
+    }
+    #center-crosshair svg {
+      width: 100%;
+      height: 100%;
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <!-- Center crosshair for land rights queries - rendered in WebView to avoid Flutter/platform view event issues -->
+  <div id="center-crosshair">
+    <svg viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg">
+      <!-- Outer circle -->
+      <circle cx="30" cy="30" r="28" fill="none" stroke="rgba(0,0,0,0.7)" stroke-width="2"/>
+      <!-- Crosshair lines with gap in center -->
+      <line x1="30" y1="4" x2="30" y2="26" stroke="rgba(0,0,0,0.5)" stroke-width="1.5"/>
+      <line x1="30" y1="34" x2="30" y2="56" stroke="rgba(0,0,0,0.5)" stroke-width="1.5"/>
+      <line x1="4" y1="30" x2="26" y2="30" stroke="rgba(0,0,0,0.5)" stroke-width="1.5"/>
+      <line x1="34" y1="30" x2="56" y2="30" stroke="rgba(0,0,0,0.5)" stroke-width="1.5"/>
+    </svg>
+  </div>
+  <script>
+    // Global error handler to catch loading errors
+    window.onerror = function(msg, url, lineNo, columnNo, error) {
+      if (window.mapEvent) {
+        window.mapEvent.postMessage(JSON.stringify({
+          type: 'jsError',
+          data: { message: msg, url: url, line: lineNo, error: error ? error.toString() : null }
+        }));
+      }
+      console.error('JS Error:', msg, url, lineNo);
+      return false;
+    };
+
+    // Check if mapboxgl loaded
+    setTimeout(function() {
+      if (window.mapEvent) {
+        window.mapEvent.postMessage(JSON.stringify({
+          type: 'jsLog',
+          data: {
+            message: 'Checking mapboxgl...',
+            mapboxglDefined: typeof mapboxgl !== 'undefined',
+            mapEventDefined: typeof window.mapEvent !== 'undefined'
+          }
+        }));
+      }
+    }, 1000);
+
+    // Mapbox access token will be set from Flutter
+    let map = null;
+    let accessToken = null;
+
+    // Source and layer IDs for overlays
+    const LAND_SOURCE = 'land-ownership-source';
+    const LAND_FILL_LAYER = 'land-ownership-fill';
+    const LAND_LINE_LAYER = 'land-ownership-line';
+    const HIGHLIGHT_SOURCE = 'highlight-parcel-source';
+    const HIGHLIGHT_FILL_LAYER = 'highlight-parcel-fill';
+    const HIGHLIGHT_LINE_LAYER = 'highlight-parcel-line';
+    const TRAILS_SOURCE = 'trails-source';
+    const TRAILS_LAYER = 'trails-layer';
+    const HISTORICAL_SOURCE = 'historical-places-source';
+    const HISTORICAL_LAYER = 'historical-places-layer';
+    const HISTORICAL_CLUSTER_LAYER = 'historical-places-clusters';
+    const HISTORICAL_CLUSTER_COUNT_LAYER = 'historical-places-cluster-count';
+    const CUSTOM_MARKERS_SOURCE = 'custom-markers-source';
+    const CUSTOM_MARKERS_LAYER = 'custom-markers-layer';
+    const CUSTOM_MARKERS_CLUSTER_LAYER = 'custom-markers-clusters';
+    const CUSTOM_MARKERS_CLUSTER_COUNT_LAYER = 'custom-markers-cluster-count';
+    const WAYPOINTS_SOURCE = 'waypoints-source';
+    const WAYPOINTS_LAYER = 'waypoints-layer';
+    const BREADCRUMBS_SOURCE = 'breadcrumbs-source';
+    const BREADCRUMBS_LAYER = 'breadcrumbs-layer';
+
+    // Track keyboard modifier state
+    let shiftPressed = false;
+    let ctrlPressed = false;
+    let altPressed = false;
+
+    // Initialize the map
+    function initMap(token, center, zoom, style) {
+      sendToFlutter('jsLog', { message: 'initMap called', token: token ? 'present' : 'missing', center: center, zoom: zoom });
+
+      try {
+        accessToken = token;
+        mapboxgl.accessToken = token;
+
+        var container = document.getElementById('map');
+        sendToFlutter('jsLog', { message: 'Creating map...', containerFound: !!container, containerSize: container ? container.offsetWidth + 'x' + container.offsetHeight : 'n/a' });
+
+        map = new mapboxgl.Map({
+          container: 'map',
+          style: style || 'mapbox://styles/mapbox/outdoors-v12',
+          center: center || [-98.5795, 39.8283], // US center default
+          zoom: zoom || 4,
+          attributionControl: false,
+          // Enable all interactive handlers for desktop
+          boxZoom: true,          // Shift + drag = box zoom
+          dragRotate: true,       // Right-click drag = rotate/pitch
+          dragPan: true,          // Left-click drag = pan
+          keyboard: true,         // Arrow keys, +/-
+          doubleClickZoom: true,  // Double-click = zoom in
+          scrollZoom: true        // Mouse wheel = zoom
+        });
+
+        sendToFlutter('jsLog', { message: 'Map object created, adding event listeners...' });
+
+        // Add navigation controls
+        map.addControl(new mapboxgl.NavigationControl(), 'top-right');
+        map.addControl(new mapboxgl.ScaleControl(), 'bottom-left');
+
+        // Notify Flutter when map is ready
+        map.on('load', function() {
+          sendToFlutter('jsLog', { message: 'Map load event fired!' });
+          sendToFlutter('mapReady', { success: true });
+        });
+
+        // Listen for errors
+        map.on('error', function(e) {
+          sendToFlutter('jsError', { message: 'Mapbox error: ' + (e.error ? e.error.message : JSON.stringify(e)) });
+        });
+
+        sendToFlutter('jsLog', { message: 'Map initialization complete, waiting for load...' });
+
+      } catch (e) {
+        sendToFlutter('jsError', { message: 'initMap exception: ' + e.message, stack: e.stack });
+      }
+
+      // Notify Flutter on map movement
+      map.on('moveend', function() {
+        const center = map.getCenter();
+        const zoom = map.getZoom();
+        const bearing = map.getBearing();
+        sendToFlutter('mapViewChanged', {
+          latitude: center.lat,
+          longitude: center.lng,
+          zoom: zoom,
+          bearing: bearing
+        });
+      });
+
+      // Helper function to safely query layer features (returns empty array if layer doesn't exist)
+      function safeQueryFeatures(point, layerId) {
+        if (!map.getLayer(layerId)) return [];
+        try {
+          return map.queryRenderedFeatures(point, { layers: [layerId] });
+        } catch (e) {
+          return [];
+        }
+      }
+
+      // Handle click events
+      map.on('click', function(e) {
+        // Check for cluster clicks first - zoom in to expand
+        const historicalClusterFeatures = safeQueryFeatures(e.point, HISTORICAL_CLUSTER_LAYER);
+        if (historicalClusterFeatures.length > 0) {
+          const clusterId = historicalClusterFeatures[0].properties.cluster_id;
+          const source = map.getSource(HISTORICAL_SOURCE);
+          if (source && source.getClusterExpansionZoom) {
+            source.getClusterExpansionZoom(clusterId, function(err, zoom) {
+              if (err) return;
+              map.easeTo({
+                center: historicalClusterFeatures[0].geometry.coordinates,
+                zoom: zoom
+              });
+            });
+          }
+          return;
+        }
+
+        const customMarkerClusterFeatures = safeQueryFeatures(e.point, CUSTOM_MARKERS_CLUSTER_LAYER);
+        if (customMarkerClusterFeatures.length > 0) {
+          const clusterId = customMarkerClusterFeatures[0].properties.cluster_id;
+          const source = map.getSource(CUSTOM_MARKERS_SOURCE);
+          if (source && source.getClusterExpansionZoom) {
+            source.getClusterExpansionZoom(clusterId, function(err, zoom) {
+              if (err) return;
+              map.easeTo({
+                center: customMarkerClusterFeatures[0].geometry.coordinates,
+                zoom: zoom
+              });
+            });
+          }
+          return;
+        }
+
+        // Check for feature clicks (order matters - smallest/most specific features first)
+
+        // 1. Waypoints (small points, highest priority)
+        const waypointFeatures = safeQueryFeatures(e.point, WAYPOINTS_LAYER);
+        if (waypointFeatures.length > 0) {
+          sendToFlutter('waypointTap', {
+            properties: waypointFeatures[0].properties,
+            coordinates: { lat: e.lngLat.lat, lng: e.lngLat.lng }
+          });
+          return;
+        }
+
+        // 2. Historical places - check both emoji layer and background circle
+        let historicalFeatures = safeQueryFeatures(e.point, HISTORICAL_LAYER);
+        if (historicalFeatures.length === 0) {
+          historicalFeatures = safeQueryFeatures(e.point, HISTORICAL_LAYER + '-bg');
+        }
+        if (historicalFeatures.length > 0) {
+          sendToFlutter('historicalPlaceTap', {
+            properties: historicalFeatures[0].properties,
+            coordinates: { lat: e.lngLat.lat, lng: e.lngLat.lng }
+          });
+          return;
+        }
+
+        // 3. Custom markers - check both emoji layer and background circle
+        let customMarkerFeatures = safeQueryFeatures(e.point, CUSTOM_MARKERS_LAYER);
+        if (customMarkerFeatures.length === 0) {
+          customMarkerFeatures = safeQueryFeatures(e.point, CUSTOM_MARKERS_LAYER + '-bg');
+        }
+        if (customMarkerFeatures.length > 0) {
+          sendToFlutter('customMarkerTap', {
+            properties: customMarkerFeatures[0].properties,
+            coordinates: { lat: e.lngLat.lat, lng: e.lngLat.lng }
+          });
+          return;
+        }
+
+        // 4. Trails (narrow lines)
+        const trailFeatures = safeQueryFeatures(e.point, TRAILS_LAYER);
+        if (trailFeatures.length > 0) {
+          sendToFlutter('trailTap', {
+            properties: trailFeatures[0].properties,
+            coordinates: { lat: e.lngLat.lat, lng: e.lngLat.lng }
+          });
+          return;
+        }
+
+        // 5. Land parcels (wide polygons - lowest priority)
+        const landFeatures = safeQueryFeatures(e.point, LAND_FILL_LAYER);
+        if (landFeatures.length > 0) {
+          sendToFlutter('landParcelTap', {
+            properties: landFeatures[0].properties,
+            coordinates: { lat: e.lngLat.lat, lng: e.lngLat.lng }
+          });
+          return;
+        }
+
+        // Generic map tap
+        sendToFlutter('mapTap', {
+          latitude: e.lngLat.lat,
+          longitude: e.lngLat.lng
+        });
+      });
+
+      // Handle long press (context menu)
+      // Only triggers if user holds still - any movement cancels the timer
+      let longPressTimer = null;
+      let longPressStartPos = null;
+      const LONG_PRESS_MOVE_THRESHOLD = 5; // pixels
+
+      map.on('mousedown', function(e) {
+        longPressStartPos = e.point;
+        longPressTimer = setTimeout(function() {
+          sendToFlutter('mapLongPress', {
+            latitude: e.lngLat.lat,
+            longitude: e.lngLat.lng
+          });
+          longPressTimer = null;
+        }, 500);
+      });
+
+      map.on('mouseup', function() {
+        if (longPressTimer) {
+          clearTimeout(longPressTimer);
+          longPressTimer = null;
+        }
+        longPressStartPos = null;
+      });
+
+      map.on('mousemove', function(e) {
+        // Cancel long press if mouse moved beyond threshold
+        if (longPressTimer && longPressStartPos) {
+          const dx = e.point.x - longPressStartPos.x;
+          const dy = e.point.y - longPressStartPos.y;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+          if (distance > LONG_PRESS_MOVE_THRESHOLD) {
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
+          }
+        }
+      });
+
+      // Also cancel on drag start (explicit pan gesture)
+      map.on('dragstart', function() {
+        if (longPressTimer) {
+          clearTimeout(longPressTimer);
+          longPressTimer = null;
+        }
+      });
+
+      // Cancel on zoom/rotate gestures too
+      map.on('zoomstart', function() {
+        if (longPressTimer) {
+          clearTimeout(longPressTimer);
+          longPressTimer = null;
+        }
+      });
+      map.on('rotatestart', function() {
+        if (longPressTimer) {
+          clearTimeout(longPressTimer);
+          longPressTimer = null;
+        }
+      });
+
+      // ========================================
+      // ENHANCED DESKTOP MOUSE/KEYBOARD CONTROLS
+      // ========================================
+
+      // Track modifier keys globally
+      document.addEventListener('keydown', function(e) {
+        shiftPressed = e.shiftKey;
+        ctrlPressed = e.ctrlKey || e.metaKey; // metaKey for Mac Cmd
+        altPressed = e.altKey;
+
+        // Keyboard shortcuts (only when map has focus or document is focused)
+        handleKeyboardShortcut(e);
+      });
+
+      document.addEventListener('keyup', function(e) {
+        shiftPressed = e.shiftKey;
+        ctrlPressed = e.ctrlKey || e.metaKey;
+        altPressed = e.altKey;
+      });
+
+      // Handle keyboard shortcuts
+      function handleKeyboardShortcut(e) {
+        if (!map) return;
+
+        const key = e.key.toLowerCase();
+        const center = map.getCenter();
+        const zoom = map.getZoom();
+        const PAN_AMOUNT = 100; // pixels
+
+        switch (key) {
+          // Zoom controls
+          case '=':
+          case '+':
+            e.preventDefault();
+            map.zoomIn({ duration: 200 });
+            break;
+          case '-':
+          case '_':
+            e.preventDefault();
+            map.zoomOut({ duration: 200 });
+            break;
+
+          // Quick zoom levels (0-9 maps to zoom 0-18)
+          case '0':
+            e.preventDefault();
+            map.setZoom(2);
+            break;
+          case '1':
+            e.preventDefault();
+            map.setZoom(4);
+            break;
+          case '2':
+            e.preventDefault();
+            map.setZoom(6);
+            break;
+          case '3':
+            e.preventDefault();
+            map.setZoom(8);
+            break;
+          case '4':
+            e.preventDefault();
+            map.setZoom(10);
+            break;
+          case '5':
+            e.preventDefault();
+            map.setZoom(12);
+            break;
+          case '6':
+            e.preventDefault();
+            map.setZoom(14);
+            break;
+          case '7':
+            e.preventDefault();
+            map.setZoom(16);
+            break;
+          case '8':
+            e.preventDefault();
+            map.setZoom(17);
+            break;
+          case '9':
+            e.preventDefault();
+            map.setZoom(18);
+            break;
+
+          // Reset north
+          case 'r':
+          case 'n':
+            if (!ctrlPressed) { // Don't interfere with Ctrl+R refresh
+              e.preventDefault();
+              map.easeTo({ bearing: 0, pitch: 0, duration: 300 });
+            }
+            break;
+
+          // Arrow key panning
+          case 'arrowup':
+            e.preventDefault();
+            map.panBy([0, -PAN_AMOUNT], { duration: 100 });
+            break;
+          case 'arrowdown':
+            e.preventDefault();
+            map.panBy([0, PAN_AMOUNT], { duration: 100 });
+            break;
+          case 'arrowleft':
+            e.preventDefault();
+            map.panBy([-PAN_AMOUNT, 0], { duration: 100 });
+            break;
+          case 'arrowright':
+            e.preventDefault();
+            map.panBy([PAN_AMOUNT, 0], { duration: 100 });
+            break;
+
+          // Home key = fit to world view
+          case 'home':
+            e.preventDefault();
+            map.flyTo({ center: [-98.5795, 39.8283], zoom: 4, duration: 1000 });
+            break;
+        }
+      }
+
+      // Enhanced scroll wheel handling with modifiers
+      // Mapbox default: scroll = zoom
+      // With Shift: slower/finer zoom control
+      // With Ctrl/Cmd: faster zoom (2x speed)
+      // With Alt: pan vertically instead of zoom
+      const mapContainer = document.getElementById('map');
+
+      mapContainer.addEventListener('wheel', function(e) {
+        if (!map) return;
+
+        // Alt + scroll = vertical pan (like scrolling a document)
+        if (altPressed && !shiftPressed && !ctrlPressed) {
+          e.preventDefault();
+          const panAmount = e.deltaY * 0.5;
+          map.panBy([0, panAmount], { duration: 0 });
+          return;
+        }
+
+        // Shift + scroll = horizontal pan
+        if (shiftPressed && !ctrlPressed && !altPressed) {
+          e.preventDefault();
+          const panAmount = e.deltaY * 0.5;
+          map.panBy([panAmount, 0], { duration: 0 });
+          return;
+        }
+
+        // Ctrl/Cmd + scroll = faster zoom (let Mapbox handle but we can customize)
+        // Default Mapbox scroll zoom is fine, but we can intercept for finer control
+        if (ctrlPressed && !shiftPressed && !altPressed) {
+          e.preventDefault();
+          const zoomDelta = e.deltaY > 0 ? -0.5 : 0.5; // Larger steps
+          const newZoom = Math.max(0, Math.min(22, map.getZoom() + zoomDelta));
+          map.easeTo({ zoom: newZoom, duration: 100 });
+          return;
+        }
+
+        // Default: let Mapbox handle normal scroll zoom
+      }, { passive: false });
+
+      // Middle mouse button drag = pan (alternative to left-click)
+      let middleButtonDown = false;
+      let middleButtonLastPos = null;
+
+      mapContainer.addEventListener('mousedown', function(e) {
+        if (e.button === 1) { // Middle button
+          e.preventDefault();
+          middleButtonDown = true;
+          middleButtonLastPos = { x: e.clientX, y: e.clientY };
+          mapContainer.style.cursor = 'grabbing';
+        }
+      });
+
+      document.addEventListener('mousemove', function(e) {
+        if (middleButtonDown && middleButtonLastPos && map) {
+          const dx = e.clientX - middleButtonLastPos.x;
+          const dy = e.clientY - middleButtonLastPos.y;
+          map.panBy([-dx, -dy], { duration: 0 });
+          middleButtonLastPos = { x: e.clientX, y: e.clientY };
+        }
+      });
+
+      document.addEventListener('mouseup', function(e) {
+        if (e.button === 1) { // Middle button
+          middleButtonDown = false;
+          middleButtonLastPos = null;
+          mapContainer.style.cursor = '';
+        }
+      });
+
+      // Double right-click = zoom out (complement to double left-click zoom in)
+      let rightClickCount = 0;
+      let rightClickTimer = null;
+
+      mapContainer.addEventListener('contextmenu', function(e) {
+        e.preventDefault(); // Prevent context menu
+
+        rightClickCount++;
+        if (rightClickCount === 1) {
+          rightClickTimer = setTimeout(function() {
+            rightClickCount = 0;
+            // Single right-click: show coordinates in console (or could trigger Flutter callback)
+            const rect = mapContainer.getBoundingClientRect();
+            const point = new mapboxgl.Point(e.clientX - rect.left, e.clientY - rect.top);
+            const lngLat = map.unproject(point);
+            sendToFlutter('jsLog', { message: 'Right-click at: ' + lngLat.lat.toFixed(6) + ', ' + lngLat.lng.toFixed(6) });
+          }, 300);
+        } else if (rightClickCount === 2) {
+          clearTimeout(rightClickTimer);
+          rightClickCount = 0;
+          // Double right-click = zoom out centered on click location
+          const rect = mapContainer.getBoundingClientRect();
+          const point = new mapboxgl.Point(e.clientX - rect.left, e.clientY - rect.top);
+          const lngLat = map.unproject(point);
+          map.easeTo({
+            center: lngLat,
+            zoom: map.getZoom() - 1,
+            duration: 300
+          });
+        }
+      });
+
+      // Send keyboard shortcuts info to Flutter on map ready
+      sendToFlutter('jsLog', {
+        message: 'Desktop controls enabled',
+        controls: {
+          scroll: 'Zoom in/out',
+          shiftScroll: 'Pan horizontally',
+          altScroll: 'Pan vertically',
+          ctrlScroll: 'Fast zoom',
+          shiftDrag: 'Box zoom (draw rectangle)',
+          rightDrag: 'Rotate and pitch',
+          middleDrag: 'Pan',
+          doubleClick: 'Zoom in',
+          doubleRightClick: 'Zoom out',
+          arrowKeys: 'Pan',
+          plusMinus: 'Zoom in/out',
+          numbers0to9: 'Quick zoom levels',
+          rOrN: 'Reset north',
+          home: 'World view'
+        }
+      });
+    }
+
+    // Send message to Flutter via webview_flutter JavaScript channel
+    function sendToFlutter(type, data) {
+      // webview_flutter exposes JavaScript channels as global objects
+      // The channel name 'mapEvent' becomes window.mapEvent
+      if (window.mapEvent) {
+        window.mapEvent.postMessage(JSON.stringify({ type: type, data: data }));
+      } else {
+        console.error('mapEvent channel not available');
+      }
+    }
+
+    // Camera controls
+    function flyTo(lat, lng, zoom, bearing) {
+      if (!map) return;
+      map.flyTo({
+        center: [lng, lat],
+        zoom: zoom || map.getZoom(),
+        bearing: bearing || 0,
+        duration: 1000
+      });
+    }
+
+    function setCenter(lat, lng) {
+      if (!map) return;
+      map.setCenter([lng, lat]);
+    }
+
+    function setZoom(zoom) {
+      if (!map) return;
+      map.setZoom(zoom);
+    }
+
+    function setBearing(bearing) {
+      if (!map) return;
+      map.setBearing(bearing);
+    }
+
+    function resetNorth() {
+      if (!map) return;
+      map.easeTo({ bearing: 0, duration: 300 });
+    }
+
+    // Style controls
+    function setStyle(styleUri) {
+      if (!map) return;
+      map.setStyle(styleUri);
+      // Re-add overlays after style change
+      map.once('style.load', function() {
+        sendToFlutter('styleLoaded', { style: styleUri });
+      });
+    }
+
+    // Get current map bounds for data loading
+    function getBounds() {
+      if (!map) return null;
+      const bounds = map.getBounds();
+      return {
+        north: bounds.getNorth(),
+        south: bounds.getSouth(),
+        east: bounds.getEast(),
+        west: bounds.getWest()
+      };
+    }
+
+    // Land ownership overlay
+    function loadLandOwnership(geojson) {
+      if (!map) return;
+
+      // Parse GeoJSON if string
+      const data = typeof geojson === 'string' ? JSON.parse(geojson) : geojson;
+
+      // If source already exists, just update the data (prevents flashing)
+      const existingSource = map.getSource(LAND_SOURCE);
+      if (existingSource) {
+        existingSource.setData(data);
+        sendToFlutter('overlayLoaded', { type: 'landOwnership' });
+        return;
+      }
+
+      // First time: add source and layers
+      map.addSource(LAND_SOURCE, {
+        type: 'geojson',
+        data: data
+      });
+
+      // Add fill layer (semi-transparent)
+      map.addLayer({
+        id: LAND_FILL_LAYER,
+        type: 'fill',
+        source: LAND_SOURCE,
+        paint: {
+          'fill-color': ['get', 'color'],
+          'fill-opacity': 0.3
+        }
+      });
+
+      // Add outline layer
+      map.addLayer({
+        id: LAND_LINE_LAYER,
+        type: 'line',
+        source: LAND_SOURCE,
+        paint: {
+          'line-color': ['get', 'color'],
+          'line-width': 1.5
+        }
+      });
+
+      sendToFlutter('overlayLoaded', { type: 'landOwnership' });
+    }
+
+    function clearLandOwnership() {
+      if (!map) return;
+      if (map.getLayer(LAND_LINE_LAYER)) map.removeLayer(LAND_LINE_LAYER);
+      if (map.getLayer(LAND_FILL_LAYER)) map.removeLayer(LAND_FILL_LAYER);
+      if (map.getSource(LAND_SOURCE)) map.removeSource(LAND_SOURCE);
+    }
+
+    // Highlighted parcel overlay (for selected parcel)
+    function highlightParcel(geojson) {
+      if (!map) return;
+
+      const data = typeof geojson === 'string' ? JSON.parse(geojson) : geojson;
+
+      // If source already exists, just update the data
+      const existingSource = map.getSource(HIGHLIGHT_SOURCE);
+      if (existingSource) {
+        existingSource.setData(data);
+        return;
+      }
+
+      // First time: add source and layers
+      map.addSource(HIGHLIGHT_SOURCE, {
+        type: 'geojson',
+        data: data
+      });
+
+      // Add highlight fill layer (semi-transparent gold)
+      map.addLayer({
+        id: HIGHLIGHT_FILL_LAYER,
+        type: 'fill',
+        source: HIGHLIGHT_SOURCE,
+        paint: {
+          'fill-color': '#D4AF37',
+          'fill-opacity': 0.4
+        }
+      });
+
+      // Add highlight outline layer (thick gold border)
+      map.addLayer({
+        id: HIGHLIGHT_LINE_LAYER,
+        type: 'line',
+        source: HIGHLIGHT_SOURCE,
+        paint: {
+          'line-color': '#D4AF37',
+          'line-width': 3
+        }
+      });
+    }
+
+    function clearHighlight() {
+      if (!map) return;
+      if (map.getLayer(HIGHLIGHT_LINE_LAYER)) map.removeLayer(HIGHLIGHT_LINE_LAYER);
+      if (map.getLayer(HIGHLIGHT_FILL_LAYER)) map.removeLayer(HIGHLIGHT_FILL_LAYER);
+      if (map.getSource(HIGHLIGHT_SOURCE)) map.removeSource(HIGHLIGHT_SOURCE);
+    }
+
+    // Trails overlay
+    function loadTrails(geojson) {
+      if (!map) return;
+
+      const data = typeof geojson === 'string' ? JSON.parse(geojson) : geojson;
+
+      // Debug: log trail count
+      sendToFlutter('jsLog', {
+        message: 'Loading trails',
+        featureCount: data.features ? data.features.length : 0,
+        sampleGeometry: data.features && data.features[0] ? data.features[0].geometry.type : 'none'
+      });
+
+      // If source already exists, just update the data (prevents flashing)
+      const existingSource = map.getSource(TRAILS_SOURCE);
+      if (existingSource) {
+        existingSource.setData(data);
+        sendToFlutter('overlayLoaded', { type: 'trails' });
+        return;
+      }
+
+      // First time: add source and layers
+      map.addSource(TRAILS_SOURCE, {
+        type: 'geojson',
+        data: data
+      });
+
+      // Add trail layer with better visibility
+      map.addLayer({
+        id: TRAILS_LAYER,
+        type: 'line',
+        source: TRAILS_SOURCE,
+        layout: {
+          'line-join': 'round',
+          'line-cap': 'round'
+        },
+        paint: {
+          'line-color': ['coalesce', ['get', 'color'], '#8B4513'],
+          'line-width': 3,
+          'line-opacity': 0.9
+        }
+      });
+
+      sendToFlutter('overlayLoaded', { type: 'trails' });
+    }
+
+    function clearTrails() {
+      if (!map) return;
+      if (map.getLayer(TRAILS_LAYER)) map.removeLayer(TRAILS_LAYER);
+      if (map.getSource(TRAILS_SOURCE)) map.removeSource(TRAILS_SOURCE);
+    }
+
+    // Historical places overlay with clustering and emoji icons
+    function loadHistoricalPlaces(geojson) {
+      if (!map) return;
+
+      const data = typeof geojson === 'string' ? JSON.parse(geojson) : geojson;
+
+      // If source already exists, just update the data (prevents flashing)
+      const existingSource = map.getSource(HISTORICAL_SOURCE);
+      if (existingSource) {
+        existingSource.setData(data);
+        sendToFlutter('overlayLoaded', { type: 'historicalPlaces' });
+        return;
+      }
+
+      // First time: add source with clustering enabled
+      map.addSource(HISTORICAL_SOURCE, {
+        type: 'geojson',
+        data: data,
+        cluster: true,
+        clusterMaxZoom: 14,
+        clusterRadius: 50
+      });
+
+      // Cluster circles layer
+      map.addLayer({
+        id: HISTORICAL_CLUSTER_LAYER,
+        type: 'circle',
+        source: HISTORICAL_SOURCE,
+        filter: ['has', 'point_count'],
+        paint: {
+          'circle-color': '#8B4513',
+          'circle-radius': [
+            'step',
+            ['get', 'point_count'],
+            15,    // radius for count < 10
+            10, 20, // radius 20 for count >= 10
+            50, 25  // radius 25 for count >= 50
+          ],
+          'circle-stroke-width': 2,
+          'circle-stroke-color': '#ffffff'
+        }
+      });
+
+      // Cluster count label
+      map.addLayer({
+        id: HISTORICAL_CLUSTER_COUNT_LAYER,
+        type: 'symbol',
+        source: HISTORICAL_SOURCE,
+        filter: ['has', 'point_count'],
+        layout: {
+          'text-field': ['get', 'point_count_abbreviated'],
+          'text-font': ['DIN Offc Pro Medium', 'Arial Unicode MS Bold'],
+          'text-size': 12,
+          'text-optional': true
+        },
+        paint: {
+          'text-color': '#ffffff'
+        }
+      });
+
+      // Individual markers - colored circle background (always visible)
+      map.addLayer({
+        id: HISTORICAL_LAYER + '-bg',
+        type: 'circle',
+        source: HISTORICAL_SOURCE,
+        filter: ['!', ['has', 'point_count']],
+        paint: {
+          'circle-radius': 14,
+          'circle-color': ['coalesce', ['get', 'color'], '#8B4513'],
+          'circle-stroke-width': 2,
+          'circle-stroke-color': '#ffffff'
+        }
+      });
+
+      // Individual markers with emoji icons (on top of circle, optional if rendering fails)
+      map.addLayer({
+        id: HISTORICAL_LAYER,
+        type: 'symbol',
+        source: HISTORICAL_SOURCE,
+        filter: ['!', ['has', 'point_count']],
+        layout: {
+          'text-field': ['get', 'emoji'],
+          'text-size': 16,
+          'text-allow-overlap': true,
+          'text-ignore-placement': true,
+          'text-optional': true
+        }
+      });
+
+      sendToFlutter('overlayLoaded', { type: 'historicalPlaces' });
+    }
+
+    function clearHistoricalPlaces() {
+      if (!map) return;
+      if (map.getLayer(HISTORICAL_CLUSTER_COUNT_LAYER)) map.removeLayer(HISTORICAL_CLUSTER_COUNT_LAYER);
+      if (map.getLayer(HISTORICAL_CLUSTER_LAYER)) map.removeLayer(HISTORICAL_CLUSTER_LAYER);
+      if (map.getLayer(HISTORICAL_LAYER)) map.removeLayer(HISTORICAL_LAYER);
+      if (map.getLayer(HISTORICAL_LAYER + '-bg')) map.removeLayer(HISTORICAL_LAYER + '-bg');
+      if (map.getSource(HISTORICAL_SOURCE)) map.removeSource(HISTORICAL_SOURCE);
+    }
+
+    // Custom markers overlay with clustering and emoji icons
+    function loadCustomMarkers(geojson) {
+      if (!map) return;
+
+      const data = typeof geojson === 'string' ? JSON.parse(geojson) : geojson;
+
+      // If source already exists, just update the data (prevents flashing)
+      const existingSource = map.getSource(CUSTOM_MARKERS_SOURCE);
+      if (existingSource) {
+        existingSource.setData(data);
+        sendToFlutter('overlayLoaded', { type: 'customMarkers' });
+        return;
+      }
+
+      // First time: add source with clustering enabled
+      map.addSource(CUSTOM_MARKERS_SOURCE, {
+        type: 'geojson',
+        data: data,
+        cluster: true,
+        clusterMaxZoom: 14,
+        clusterRadius: 50
+      });
+
+      // Cluster circles layer
+      map.addLayer({
+        id: CUSTOM_MARKERS_CLUSTER_LAYER,
+        type: 'circle',
+        source: CUSTOM_MARKERS_SOURCE,
+        filter: ['has', 'point_count'],
+        paint: {
+          'circle-color': '#D4AF37',
+          'circle-radius': [
+            'step',
+            ['get', 'point_count'],
+            15,    // radius for count < 10
+            10, 20, // radius 20 for count >= 10
+            50, 25  // radius 25 for count >= 50
+          ],
+          'circle-stroke-width': 2,
+          'circle-stroke-color': '#ffffff'
+        }
+      });
+
+      // Cluster count label
+      map.addLayer({
+        id: CUSTOM_MARKERS_CLUSTER_COUNT_LAYER,
+        type: 'symbol',
+        source: CUSTOM_MARKERS_SOURCE,
+        filter: ['has', 'point_count'],
+        layout: {
+          'text-field': ['get', 'point_count_abbreviated'],
+          'text-font': ['DIN Offc Pro Medium', 'Arial Unicode MS Bold'],
+          'text-size': 12,
+          'text-optional': true
+        },
+        paint: {
+          'text-color': '#ffffff'
+        }
+      });
+
+      // Individual markers - colored circle background (always visible)
+      map.addLayer({
+        id: CUSTOM_MARKERS_LAYER + '-bg',
+        type: 'circle',
+        source: CUSTOM_MARKERS_SOURCE,
+        filter: ['!', ['has', 'point_count']],
+        paint: {
+          'circle-radius': 16,
+          'circle-color': ['coalesce', ['get', 'color'], '#D4AF37'],
+          'circle-stroke-width': 2,
+          'circle-stroke-color': '#ffffff'
+        }
+      });
+
+      // Individual markers with emoji icons (on top of circle, optional if rendering fails)
+      map.addLayer({
+        id: CUSTOM_MARKERS_LAYER,
+        type: 'symbol',
+        source: CUSTOM_MARKERS_SOURCE,
+        filter: ['!', ['has', 'point_count']],
+        layout: {
+          'text-field': ['get', 'emoji'],
+          'text-size': 18,
+          'text-allow-overlap': true,
+          'text-ignore-placement': true,
+          'text-optional': true
+        }
+      });
+
+      sendToFlutter('overlayLoaded', { type: 'customMarkers' });
+    }
+
+    function clearCustomMarkers() {
+      if (!map) return;
+      if (map.getLayer(CUSTOM_MARKERS_CLUSTER_COUNT_LAYER)) map.removeLayer(CUSTOM_MARKERS_CLUSTER_COUNT_LAYER);
+      if (map.getLayer(CUSTOM_MARKERS_CLUSTER_LAYER)) map.removeLayer(CUSTOM_MARKERS_CLUSTER_LAYER);
+      if (map.getLayer(CUSTOM_MARKERS_LAYER)) map.removeLayer(CUSTOM_MARKERS_LAYER);
+      if (map.getLayer(CUSTOM_MARKERS_LAYER + '-bg')) map.removeLayer(CUSTOM_MARKERS_LAYER + '-bg');
+      if (map.getSource(CUSTOM_MARKERS_SOURCE)) map.removeSource(CUSTOM_MARKERS_SOURCE);
+    }
+
+    // Waypoints overlay (for session waypoints)
+    function loadWaypoints(geojson) {
+      if (!map) return;
+
+      const data = typeof geojson === 'string' ? JSON.parse(geojson) : geojson;
+
+      // If source already exists, just update the data (prevents flashing)
+      const existingSource = map.getSource(WAYPOINTS_SOURCE);
+      if (existingSource) {
+        existingSource.setData(data);
+        sendToFlutter('overlayLoaded', { type: 'waypoints' });
+        return;
+      }
+
+      // First time: add source and layers
+      map.addSource(WAYPOINTS_SOURCE, {
+        type: 'geojson',
+        data: data
+      });
+
+      map.addLayer({
+        id: WAYPOINTS_LAYER,
+        type: 'circle',
+        source: WAYPOINTS_SOURCE,
+        paint: {
+          'circle-radius': 7,
+          'circle-color': ['get', 'color'],
+          'circle-stroke-width': 2,
+          'circle-stroke-color': '#ffffff'
+        }
+      });
+
+      sendToFlutter('overlayLoaded', { type: 'waypoints' });
+    }
+
+    function clearWaypoints() {
+      if (!map) return;
+      if (map.getLayer(WAYPOINTS_LAYER)) map.removeLayer(WAYPOINTS_LAYER);
+      if (map.getSource(WAYPOINTS_SOURCE)) map.removeSource(WAYPOINTS_SOURCE);
+    }
+
+    // Breadcrumbs overlay (for session playback trail)
+    function loadBreadcrumbs(geojson) {
+      if (!map) return;
+
+      const data = typeof geojson === 'string' ? JSON.parse(geojson) : geojson;
+
+      // If source already exists, just update the data (prevents flashing)
+      const existingSource = map.getSource(BREADCRUMBS_SOURCE);
+      if (existingSource) {
+        existingSource.setData(data);
+        sendToFlutter('overlayLoaded', { type: 'breadcrumbs' });
+        return;
+      }
+
+      // First time: add source and layers
+      map.addSource(BREADCRUMBS_SOURCE, {
+        type: 'geojson',
+        data: data
+      });
+
+      map.addLayer({
+        id: BREADCRUMBS_LAYER,
+        type: 'line',
+        source: BREADCRUMBS_SOURCE,
+        paint: {
+          'line-color': ['get', 'color'],
+          'line-width': 3,
+          'line-opacity': 0.8
+        }
+      });
+
+      sendToFlutter('overlayLoaded', { type: 'breadcrumbs' });
+    }
+
+    function clearBreadcrumbs() {
+      if (!map) return;
+      if (map.getLayer(BREADCRUMBS_LAYER)) map.removeLayer(BREADCRUMBS_LAYER);
+      if (map.getSource(BREADCRUMBS_SOURCE)) map.removeSource(BREADCRUMBS_SOURCE);
+    }
+
+    // Clear all overlays
+    function clearAllOverlays() {
+      clearLandOwnership();
+      clearTrails();
+      clearHistoricalPlaces();
+      clearCustomMarkers();
+      clearWaypoints();
+      clearBreadcrumbs();
+    }
+
+    // Hillshade (terrain relief) overlay
+    const HILLSHADE_SOURCE = 'mapbox-dem';
+    const HILLSHADE_LAYER = 'hillshade-layer';
+
+    function addHillshade() {
+      if (!map) return;
+
+      try {
+        // Check if source already exists
+        if (!map.getSource(HILLSHADE_SOURCE)) {
+          map.addSource(HILLSHADE_SOURCE, {
+            type: 'raster-dem',
+            url: 'mapbox://mapbox.mapbox-terrain-dem-v1',
+            tileSize: 512,
+            maxzoom: 14
+          });
+        }
+
+        // Check if layer already exists
+        if (!map.getLayer(HILLSHADE_LAYER)) {
+          // Add hillshade layer below other overlays
+          map.addLayer({
+            id: HILLSHADE_LAYER,
+            type: 'hillshade',
+            source: HILLSHADE_SOURCE,
+            paint: {
+              'hillshade-illumination-direction': 335,
+              'hillshade-exaggeration': 0.5
+            }
+          }, LAND_FILL_LAYER); // Insert below land ownership if it exists
+        }
+
+        sendToFlutter('jsLog', { message: 'Hillshade layer added' });
+      } catch (e) {
+        // If LAND_FILL_LAYER doesn't exist, add without specifying position
+        if (!map.getLayer(HILLSHADE_LAYER)) {
+          map.addLayer({
+            id: HILLSHADE_LAYER,
+            type: 'hillshade',
+            source: HILLSHADE_SOURCE,
+            paint: {
+              'hillshade-illumination-direction': 335,
+              'hillshade-exaggeration': 0.5
+            }
+          });
+        }
+        sendToFlutter('jsLog', { message: 'Hillshade layer added (fallback)' });
+      }
+    }
+
+    function removeHillshade() {
+      if (!map) return;
+      if (map.getLayer(HILLSHADE_LAYER)) map.removeLayer(HILLSHADE_LAYER);
+      if (map.getSource(HILLSHADE_SOURCE)) map.removeSource(HILLSHADE_SOURCE);
+      sendToFlutter('jsLog', { message: 'Hillshade layer removed' });
+    }
+
+    // Historical map raster tile overlays (from MBTiles tile server)
+    // These are old USGS topos, GLO survey plats, etc.
+    const historicalMapLayers = new Map(); // Track loaded historical map IDs
+
+    function loadHistoricalMap(id, tileUrl, opacity, maxZoom) {
+      if (!map) return;
+
+      const sourceId = 'historical-map-source-' + id;
+      const layerId = 'historical-map-layer-' + id;
+
+      try {
+        // Remove existing if present (for updates)
+        removeHistoricalMap(id);
+
+        // Add raster source from local tile server
+        // maxzoom tells Mapbox to stop requesting tiles after this zoom level
+        // but keep displaying the last available tiles scaled up
+        map.addSource(sourceId, {
+          type: 'raster',
+          tiles: [tileUrl],
+          tileSize: 256,
+          maxzoom: maxZoom || 16  // Historical maps typically max at zoom 15-16
+        });
+
+        // Add raster layer - insert below land ownership so boundaries show on top
+        try {
+          map.addLayer({
+            id: layerId,
+            type: 'raster',
+            source: sourceId,
+            paint: {
+              'raster-opacity': opacity || 0.7
+            }
+          }, LAND_FILL_LAYER);
+        } catch (e) {
+          // If LAND_FILL_LAYER doesn't exist, add at bottom
+          map.addLayer({
+            id: layerId,
+            type: 'raster',
+            source: sourceId,
+            paint: {
+              'raster-opacity': opacity || 0.7
+            }
+          });
+        }
+
+        historicalMapLayers.set(id, { sourceId, layerId });
+        sendToFlutter('jsLog', { message: 'Historical map loaded: ' + id });
+        sendToFlutter('overlayLoaded', { type: 'historicalMap', id: id });
+      } catch (e) {
+        sendToFlutter('jsError', { message: 'Failed to load historical map: ' + e.message });
+      }
+    }
+
+    function removeHistoricalMap(id) {
+      if (!map) return;
+
+      const sourceId = 'historical-map-source-' + id;
+      const layerId = 'historical-map-layer-' + id;
+
+      try {
+        if (map.getLayer(layerId)) map.removeLayer(layerId);
+        if (map.getSource(sourceId)) map.removeSource(sourceId);
+        historicalMapLayers.delete(id);
+        sendToFlutter('jsLog', { message: 'Historical map removed: ' + id });
+      } catch (e) {
+        // Ignore errors when removing non-existent layers
+      }
+    }
+
+    function setHistoricalMapOpacity(id, opacity) {
+      if (!map) return;
+
+      const layerId = 'historical-map-layer-' + id;
+
+      try {
+        if (map.getLayer(layerId)) {
+          map.setPaintProperty(layerId, 'raster-opacity', opacity);
+        }
+      } catch (e) {
+        sendToFlutter('jsError', { message: 'Failed to set historical map opacity: ' + e.message });
+      }
+    }
+
+    function clearAllHistoricalMaps() {
+      if (!map) return;
+
+      for (const [id, _] of historicalMapLayers) {
+        removeHistoricalMap(id);
+      }
+    }
+
+    // Cell coverage overlay (tower points and coverage polygons)
+    const CELL_COVERAGE_SOURCE = 'cell-coverage-source';
+    const CELL_POINTS_SOURCE = 'cell-points-source';
+    const CELL_COVERAGE_FILL_LAYER = 'cell-coverage-fill';
+    const CELL_COVERAGE_LINE_LAYER = 'cell-coverage-line';
+    const CELL_POINTS_LAYER = 'cell-points-layer';
+
+    function loadCellCoverage(coverageGeojson, pointsGeojson) {
+      if (!map) return;
+
+      const coverageData = typeof coverageGeojson === 'string' ? JSON.parse(coverageGeojson) : coverageGeojson;
+      const pointsData = typeof pointsGeojson === 'string' ? JSON.parse(pointsGeojson) : pointsGeojson;
+
+      sendToFlutter('jsLog', {
+        message: 'Loading cell coverage',
+        coverageCount: coverageData.features ? coverageData.features.length : 0,
+        pointsCount: pointsData.features ? pointsData.features.length : 0
+      });
+
+      // If sources already exist, just update the data
+      const existingCoverageSource = map.getSource(CELL_COVERAGE_SOURCE);
+      const existingPointsSource = map.getSource(CELL_POINTS_SOURCE);
+
+      if (existingCoverageSource && existingPointsSource) {
+        existingCoverageSource.setData(coverageData);
+        existingPointsSource.setData(pointsData);
+        sendToFlutter('overlayLoaded', { type: 'cellCoverage' });
+        return;
+      }
+
+      // First time: add sources and layers
+      // Clear any existing first
+      clearCellCoverage();
+
+      // Add coverage polygon source
+      map.addSource(CELL_COVERAGE_SOURCE, {
+        type: 'geojson',
+        data: coverageData
+      });
+
+      // Add points source
+      map.addSource(CELL_POINTS_SOURCE, {
+        type: 'geojson',
+        data: pointsData
+      });
+
+      // Add coverage fill layer (semi-transparent)
+      map.addLayer({
+        id: CELL_COVERAGE_FILL_LAYER,
+        type: 'fill',
+        source: CELL_COVERAGE_SOURCE,
+        paint: {
+          'fill-color': [
+            'match',
+            ['get', 'radio'],
+            'GSM', 'rgba(255, 107, 107, 1)',
+            'CDMA', 'rgba(255, 107, 107, 1)',
+            'UMTS', 'rgba(255, 169, 77, 1)',
+            'LTE', 'rgba(0, 188, 212, 1)',
+            'NR', 'rgba(156, 39, 176, 1)',
+            'rgba(0, 188, 212, 1)'
+          ],
+          'fill-opacity': 0.25
+        }
+      });
+
+      // Add coverage outline layer
+      map.addLayer({
+        id: CELL_COVERAGE_LINE_LAYER,
+        type: 'line',
+        source: CELL_COVERAGE_SOURCE,
+        paint: {
+          'line-color': [
+            'match',
+            ['get', 'radio'],
+            'GSM', 'rgba(255, 107, 107, 1)',
+            'CDMA', 'rgba(255, 107, 107, 1)',
+            'UMTS', 'rgba(255, 169, 77, 1)',
+            'LTE', 'rgba(0, 188, 212, 1)',
+            'NR', 'rgba(156, 39, 176, 1)',
+            'rgba(0, 188, 212, 1)'
+          ],
+          'line-width': 1,
+          'line-opacity': 0.4
+        }
+      });
+
+      // Add tower point markers (visible when zoomed in)
+      map.addLayer({
+        id: CELL_POINTS_LAYER,
+        type: 'circle',
+        source: CELL_POINTS_SOURCE,
+        minzoom: 8,
+        paint: {
+          'circle-radius': 4,
+          'circle-color': [
+            'match',
+            ['get', 'radio'],
+            'GSM', 'rgba(255, 107, 107, 1)',
+            'CDMA', 'rgba(255, 107, 107, 1)',
+            'UMTS', 'rgba(255, 169, 77, 1)',
+            'LTE', 'rgba(0, 188, 212, 1)',
+            'NR', 'rgba(156, 39, 176, 1)',
+            'rgba(0, 188, 212, 1)'
+          ],
+          'circle-stroke-width': 1.5,
+          'circle-stroke-color': '#ffffff'
+        }
+      });
+
+      sendToFlutter('overlayLoaded', { type: 'cellCoverage' });
+    }
+
+    function clearCellCoverage() {
+      if (!map) return;
+      if (map.getLayer(CELL_POINTS_LAYER)) map.removeLayer(CELL_POINTS_LAYER);
+      if (map.getLayer(CELL_COVERAGE_LINE_LAYER)) map.removeLayer(CELL_COVERAGE_LINE_LAYER);
+      if (map.getLayer(CELL_COVERAGE_FILL_LAYER)) map.removeLayer(CELL_COVERAGE_FILL_LAYER);
+      if (map.getSource(CELL_POINTS_SOURCE)) map.removeSource(CELL_POINTS_SOURCE);
+      if (map.getSource(CELL_COVERAGE_SOURCE)) map.removeSource(CELL_COVERAGE_SOURCE);
+    }
+
+    // Center crosshair controls
+    // Rendered in HTML/CSS because Flutter's IgnorePointer doesn't work with platform views (WebView)
+    function showCenterCrosshair(isDark) {
+      const crosshair = document.getElementById('center-crosshair');
+      if (!crosshair) return;
+
+      // Update colors based on theme
+      const strokeColor = isDark ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.7)';
+      const lineColor = isDark ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)';
+
+      const circle = crosshair.querySelector('circle');
+      const lines = crosshair.querySelectorAll('line');
+
+      if (circle) circle.setAttribute('stroke', strokeColor);
+      lines.forEach(line => line.setAttribute('stroke', lineColor));
+
+      crosshair.style.display = 'block';
+    }
+
+    function hideCenterCrosshair() {
+      const crosshair = document.getElementById('center-crosshair');
+      if (crosshair) crosshair.style.display = 'none';
+    }
+
+    // Expose functions to Flutter
+    window.mapBridge = {
+      initMap: initMap,
+      flyTo: flyTo,
+      setCenter: setCenter,
+      setZoom: setZoom,
+      setBearing: setBearing,
+      resetNorth: resetNorth,
+      setStyle: setStyle,
+      getBounds: getBounds,
+      loadLandOwnership: loadLandOwnership,
+      clearLandOwnership: clearLandOwnership,
+      highlightParcel: highlightParcel,
+      clearHighlight: clearHighlight,
+      loadTrails: loadTrails,
+      clearTrails: clearTrails,
+      loadHistoricalPlaces: loadHistoricalPlaces,
+      clearHistoricalPlaces: clearHistoricalPlaces,
+      loadCustomMarkers: loadCustomMarkers,
+      clearCustomMarkers: clearCustomMarkers,
+      loadWaypoints: loadWaypoints,
+      clearWaypoints: clearWaypoints,
+      loadBreadcrumbs: loadBreadcrumbs,
+      clearBreadcrumbs: clearBreadcrumbs,
+      clearAllOverlays: clearAllOverlays,
+      addHillshade: addHillshade,
+      removeHillshade: removeHillshade,
+      loadHistoricalMap: loadHistoricalMap,
+      removeHistoricalMap: removeHistoricalMap,
+      setHistoricalMapOpacity: setHistoricalMapOpacity,
+      clearAllHistoricalMaps: clearAllHistoricalMaps,
+      loadCellCoverage: loadCellCoverage,
+      clearCellCoverage: clearCellCoverage,
+      showCenterCrosshair: showCenterCrosshair,
+      hideCenterCrosshair: hideCenterCrosshair
+    };
+  </script>
+</body>
+</html>

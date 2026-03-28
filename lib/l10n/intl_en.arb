@@ -1,0 +1,499 @@
+{
+  "@@locale": "en",
+  "@@last_modified": "2025-07-23T01:22:00.000Z",
+
+  "appTitle": "Obsession Tracker",
+  "@appTitle": {
+    "description": "The title of the application"
+  },
+
+  "appDescription": "Your compass when nothing adds up. A privacy-first GPS tracking app for treasure hunters, explorers, and adventurers.",
+  "@appDescription": {
+    "description": "The description of the application"
+  },
+
+  "home": "Home",
+  "@home": {
+    "description": "Home navigation label"
+  },
+
+  "map": "Map",
+  "@map": {
+    "description": "Map navigation label"
+  },
+
+  "tracking": "Tracking",
+  "@tracking": {
+    "description": "Tracking navigation label"
+  },
+
+  "waypoints": "Waypoints",
+  "@waypoints": {
+    "description": "Waypoints navigation label"
+  },
+
+  "settings": "Settings",
+  "@settings": {
+    "description": "Settings navigation label"
+  },
+
+  "accessibility": "Accessibility",
+  "@accessibility": {
+    "description": "Accessibility settings section"
+  },
+
+  "language": "Language",
+  "@language": {
+    "description": "Language settings section"
+  },
+
+  "theme": "Theme",
+  "@theme": {
+    "description": "Theme settings section"
+  },
+
+  "highContrast": "High Contrast",
+  "@highContrast": {
+    "description": "High contrast theme option"
+  },
+
+  "largeText": "Large Text",
+  "@largeText": {
+    "description": "Large text accessibility option"
+  },
+
+  "voiceControl": "Voice Control",
+  "@voiceControl": {
+    "description": "Voice control accessibility option"
+  },
+
+  "audioFeedback": "Audio Feedback",
+  "@audioFeedback": {
+    "description": "Audio feedback accessibility option"
+  },
+
+  "screenReader": "Screen Reader Support",
+  "@screenReader": {
+    "description": "Screen reader support option"
+  },
+
+  "startTracking": "Start Tracking",
+  "@startTracking": {
+    "description": "Button to start GPS tracking",
+    "context": "accessibility"
+  },
+
+  "stopTracking": "Stop Tracking",
+  "@stopTracking": {
+    "description": "Button to stop GPS tracking",
+    "context": "accessibility"
+  },
+
+  "addWaypoint": "Add Waypoint",
+  "@addWaypoint": {
+    "description": "Button to add a new waypoint",
+    "context": "accessibility"
+  },
+
+  "currentLocation": "Current Location",
+  "@currentLocation": {
+    "description": "Label for current GPS location",
+    "context": "accessibility"
+  },
+
+  "latitude": "Latitude",
+  "@latitude": {
+    "description": "GPS latitude coordinate label"
+  },
+
+  "longitude": "Longitude",
+  "@longitude": {
+    "description": "GPS longitude coordinate label"
+  },
+
+  "altitude": "Altitude",
+  "@altitude": {
+    "description": "GPS altitude measurement label"
+  },
+
+  "accuracy": "Accuracy",
+  "@accuracy": {
+    "description": "GPS accuracy measurement label"
+  },
+
+  "speed": "Speed",
+  "@speed": {
+    "description": "GPS speed measurement label"
+  },
+
+  "heading": "Heading",
+  "@heading": {
+    "description": "Compass heading measurement label"
+  },
+
+  "distance": "Distance",
+  "@distance": {
+    "description": "Distance measurement label"
+  },
+
+  "duration": "Duration",
+  "@duration": {
+    "description": "Time duration label"
+  },
+
+  "locationPermissionRequired": "Location permission is required to use this app",
+  "@locationPermissionRequired": {
+    "description": "Message when location permission is needed"
+  },
+
+  "microphonePermissionRequired": "Microphone permission is required for voice control",
+  "@microphonePermissionRequired": {
+    "description": "Message when microphone permission is needed for voice features"
+  },
+
+  "grantPermission": "Grant Permission",
+  "@grantPermission": {
+    "description": "Button to grant app permissions"
+  },
+
+  "voiceCommandsHelp": "Voice Commands Help",
+  "@voiceCommandsHelp": {
+    "description": "Title for voice commands help section"
+  },
+
+  "sayStartTracking": "Say 'Start tracking' to begin GPS tracking",
+  "@sayStartTracking": {
+    "description": "Voice command instruction for starting tracking"
+  },
+
+  "sayStopTracking": "Say 'Stop tracking' to end GPS tracking",
+  "@sayStopTracking": {
+    "description": "Voice command instruction for stopping tracking"
+  },
+
+  "sayAddWaypoint": "Say 'Add waypoint' to mark current location",
+  "@sayAddWaypoint": {
+    "description": "Voice command instruction for adding waypoint"
+  },
+
+  "sayShowMap": "Say 'Show map' to view the map",
+  "@sayShowMap": {
+    "description": "Voice command instruction for showing map"
+  },
+
+  "voiceCommandRecognized": "Voice command recognized: {command}",
+  "@voiceCommandRecognized": {
+    "description": "Confirmation message when voice command is recognized",
+    "placeholders": {
+      "command": {
+        "type": "String",
+        "description": "The recognized voice command"
+      }
+    }
+  },
+
+  "trackingStarted": "GPS tracking started",
+  "@trackingStarted": {
+    "description": "Announcement when tracking begins"
+  },
+
+  "trackingStopped": "GPS tracking stopped",
+  "@trackingStopped": {
+    "description": "Announcement when tracking ends"
+  },
+
+  "waypointAdded": "Waypoint added at current location",
+  "@waypointAdded": {
+    "description": "Announcement when waypoint is created"
+  },
+
+  "locationUpdated": "Location updated: {latitude}, {longitude}",
+  "@locationUpdated": {
+    "description": "Announcement when GPS location changes",
+    "placeholders": {
+      "latitude": {
+        "type": "String",
+        "description": "Current latitude coordinate"
+      },
+      "longitude": {
+        "type": "String",
+        "description": "Current longitude coordinate"
+      }
+    }
+  },
+
+  "compassHeading": "Compass heading: {degrees} degrees {direction}",
+  "@compassHeading": {
+    "description": "Compass heading announcement",
+    "placeholders": {
+      "degrees": {
+        "type": "String",
+        "description": "Compass degrees"
+      },
+      "direction": {
+        "type": "String",
+        "description": "Cardinal direction"
+      }
+    }
+  },
+
+  "north": "North",
+  "@north": {
+    "description": "Cardinal direction North"
+  },
+
+  "south": "South",
+  "@south": {
+    "description": "Cardinal direction South"
+  },
+
+  "east": "East",
+  "@east": {
+    "description": "Cardinal direction East"
+  },
+
+  "west": "West",
+  "@west": {
+    "description": "Cardinal direction West"
+  },
+
+  "northeast": "Northeast",
+  "@northeast": {
+    "description": "Cardinal direction Northeast"
+  },
+
+  "northwest": "Northwest",
+  "@northwest": {
+    "description": "Cardinal direction Northwest"
+  },
+
+  "southeast": "Southeast",
+  "@southeast": {
+    "description": "Cardinal direction Southeast"
+  },
+
+  "southwest": "Southwest",
+  "@southwest": {
+    "description": "Cardinal direction Southwest"
+  },
+
+  "meters": "meters",
+  "@meters": {
+    "description": "Unit of measurement: meters"
+  },
+
+  "kilometers": "kilometers",
+  "@kilometers": {
+    "description": "Unit of measurement: kilometers"
+  },
+
+  "feet": "feet",
+  "@feet": {
+    "description": "Unit of measurement: feet"
+  },
+
+  "miles": "miles",
+  "@miles": {
+    "description": "Unit of measurement: miles"
+  },
+
+  "metersPerSecond": "meters per second",
+  "@metersPerSecond": {
+    "description": "Unit of measurement: meters per second"
+  },
+
+  "kilometersPerHour": "kilometers per hour",
+  "@kilometersPerHour": {
+    "description": "Unit of measurement: kilometers per hour"
+  },
+
+  "milesPerHour": "miles per hour",
+  "@milesPerHour": {
+    "description": "Unit of measurement: miles per hour"
+  },
+
+  "measurementUnits": "Measurement Units",
+  "@measurementUnits": {
+    "description": "Settings section for measurement units"
+  },
+
+  "metric": "Metric",
+  "@metric": {
+    "description": "Metric measurement system"
+  },
+
+  "imperial": "Imperial",
+  "@imperial": {
+    "description": "Imperial measurement system"
+  },
+
+  "dateFormat": "Date Format",
+  "@dateFormat": {
+    "description": "Settings for date format"
+  },
+
+  "timeFormat": "Time Format",
+  "@timeFormat": {
+    "description": "Settings for time format"
+  },
+
+  "twelveHour": "12 Hour",
+  "@twelveHour": {
+    "description": "12-hour time format"
+  },
+
+  "twentyFourHour": "24 Hour",
+  "@twentyFourHour": {
+    "description": "24-hour time format"
+  },
+
+  "regionalSettings": "Regional Settings",
+  "@regionalSettings": {
+    "description": "Settings section for regional preferences"
+  },
+
+  "currency": "Currency",
+  "@currency": {
+    "description": "Currency settings"
+  },
+
+  "numberFormat": "Number Format",
+  "@numberFormat": {
+    "description": "Number formatting settings"
+  },
+
+  "textDirection": "Text Direction",
+  "@textDirection": {
+    "description": "Text direction settings for RTL languages"
+  },
+
+  "leftToRight": "Left to Right",
+  "@leftToRight": {
+    "description": "Left-to-right text direction"
+  },
+
+  "rightToLeft": "Right to Left",
+  "@rightToLeft": {
+    "description": "Right-to-left text direction"
+  },
+
+  "fontScale": "Font Scale",
+  "@fontScale": {
+    "description": "Font scaling accessibility option"
+  },
+
+  "small": "Small",
+  "@small": {
+    "description": "Small size option"
+  },
+
+  "normal": "Normal",
+  "@normal": {
+    "description": "Normal size option"
+  },
+
+  "large": "Large",
+  "@large": {
+    "description": "Large size option"
+  },
+
+  "extraLarge": "Extra Large",
+  "@extraLarge": {
+    "description": "Extra large size option"
+  },
+
+  "colorFilters": "Color Filters",
+  "@colorFilters": {
+    "description": "Color filter accessibility options"
+  },
+
+  "none": "None",
+  "@none": {
+    "description": "No filter option"
+  },
+
+  "protanopia": "Protanopia",
+  "@protanopia": {
+    "description": "Color blindness filter for protanopia"
+  },
+
+  "deuteranopia": "Deuteranopia",
+  "@deuteranopia": {
+    "description": "Color blindness filter for deuteranopia"
+  },
+
+  "tritanopia": "Tritanopia",
+  "@tritanopia": {
+    "description": "Color blindness filter for tritanopia"
+  },
+
+  "monochrome": "Monochrome",
+  "@monochrome": {
+    "description": "Monochrome color filter"
+  },
+
+  "focusIndicator": "Focus Indicator",
+  "@focusIndicator": {
+    "description": "Focus indicator accessibility option"
+  },
+
+  "enhancedFocus": "Enhanced Focus",
+  "@enhancedFocus": {
+    "description": "Enhanced focus indicator option"
+  },
+
+  "keyboardNavigation": "Keyboard Navigation",
+  "@keyboardNavigation": {
+    "description": "Keyboard navigation accessibility option"
+  },
+
+  "enabled": "Enabled",
+  "@enabled": {
+    "description": "Enabled state"
+  },
+
+  "disabled": "Disabled",
+  "@disabled": {
+    "description": "Disabled state"
+  },
+
+  "tapToActivate": "Tap to activate",
+  "@tapToActivate": {
+    "description": "Accessibility hint for tappable elements"
+  },
+
+  "doubleTabToActivate": "Double tap to activate",
+  "@doubleTabToActivate": {
+    "description": "Accessibility hint for double-tap activation"
+  },
+
+  "swipeToNavigate": "Swipe to navigate",
+  "@swipeToNavigate": {
+    "description": "Accessibility hint for swipe navigation"
+  },
+
+  "loading": "Loading",
+  "@loading": {
+    "description": "Loading state announcement"
+  },
+
+  "error": "Error",
+  "@error": {
+    "description": "Error state announcement"
+  },
+
+  "success": "Success",
+  "@success": {
+    "description": "Success state announcement"
+  },
+
+  "warning": "Warning",
+  "@warning": {
+    "description": "Warning state announcement"
+  },
+
+  "information": "Information",
+  "@information": {
+    "description": "Information state announcement"
+  }
+}

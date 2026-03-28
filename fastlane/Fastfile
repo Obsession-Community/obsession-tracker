@@ -1,0 +1,1841 @@
+# Fastfile for Obsession Tracker
+# This file contains the fastlane.tools configuration
+
+default_platform(:ios)
+
+platform :ios do
+  before_all do
+    ENV["FASTLANE_TEAM_ID"] = "686BSNR73Z"
+    ENV["FASTLANE_ITC_TEAM_ID"] = "128579436"
+  end
+
+  desc "Push a new beta build to TestFlight"
+  lane :beta do |options|
+    # Set up environment
+    setup_ci if ENV['CI']
+
+    # Get build number from options or calculate from git
+    build_number = options[:build_number] || number_of_commits
+
+    # Ensure we're in the correct directory for Flutter
+    Dir.chdir("..") do
+      # Run Flutter build
+      sh("flutter", "pub", "get")
+      sh("flutter", "clean") unless ENV["SKIP_FLUTTER_CLEAN"]
+      sh("flutter", "build", "ios",
+         "--release",
+         "--no-codesign",
+         "--build-number=#{build_number}")
+    end
+
+    # Set up code signing with App Store Connect API (if configured)
+    # Key file location: fastlane/AuthKey_{KEY_ID}.p8 (gitignored)
+    if ENV["APP_STORE_CONNECT_API_KEY_ID"]
+      key_path = ENV["APP_STORE_CONNECT_API_KEY_PATH"] ||
+                 "fastlane/AuthKey_#{ENV['APP_STORE_CONNECT_API_KEY_ID']}.p8"
+      app_store_connect_api_key(
+        key_id: ENV["APP_STORE_CONNECT_API_KEY_ID"],
+        issuer_id: ENV["APP_STORE_CONNECT_API_ISSUER_ID"],
+        key_filepath: key_path,
+        duration: 1200,
+        in_house: false
+      )
+    end
+
+    # Update build number in Xcode
+    increment_build_number(
+      build_number: build_number,
+      xcodeproj: "ios/Runner.xcodeproj"
+    )
+
+    # Install certificates and provisioning profiles
+    match(
+      type: "appstore",
+      readonly: false,
+      app_identifier: ENV["APP_IDENTIFIER"] || "com.obsessioncommunity.tracker",
+      team_id: "686BSNR73Z",
+      git_branch: "obsession-community-llc"
+    )
+
+    # Build the app
+    build_app(
+      workspace: "ios/Runner.xcworkspace",
+      scheme: "Runner",
+      export_method: "app-store",
+      export_options: {
+        teamID: "686BSNR73Z",
+        provisioningProfiles: {
+          ENV["APP_IDENTIFIER"] || "com.obsessioncommunity.tracker" => ENV["PROVISIONING_PROFILE_SPECIFIER"] || "match AppStore com.obsessioncommunity.tracker"
+        }
+      },
+      export_team_id: "686BSNR73Z",
+      output_directory: "./build",
+      output_name: "ObsessionTracker.ipa"
+    )
+
+    # Upload to TestFlight
+    # Waits for build to appear in App Store Connect (can take 10-30+ min)
+    # Skips waiting for processing to complete (that can take another 30+ min)
+    upload_to_testflight(
+      skip_waiting_for_build_processing: true,
+      team_id: "128579436",
+      dev_portal_team_id: "686BSNR73Z"
+    )
+
+    # Clean up build artifacts
+    clean_build_artifacts
+  end
+
+  desc "Upload metadata (text only) to App Store Connect - NO screenshots"
+  lane :metadata do
+    begin
+      # Set up code signing with App Store Connect API (if configured)
+      # Key file location: fastlane/AuthKey_{KEY_ID}.p8 (gitignored)
+      if ENV["APP_STORE_CONNECT_API_KEY_ID"]
+        key_path = ENV["APP_STORE_CONNECT_API_KEY_PATH"] ||
+                   "fastlane/AuthKey_#{ENV['APP_STORE_CONNECT_API_KEY_ID']}.p8"
+        app_store_connect_api_key(
+          key_id: ENV["APP_STORE_CONNECT_API_KEY_ID"],
+          issuer_id: ENV["APP_STORE_CONNECT_API_ISSUER_ID"],
+          key_filepath: key_path,
+          duration: 1200,
+          in_house: false
+        )
+      end
+
+      deliver(
+        submit_for_review: false,
+        automatic_release: false,
+        force: true, # Skip HTML verification
+        skip_binary_upload: true,
+        skip_screenshots: true, # Temporarily skip screenshots due to fastlane bug
+        overwrite_screenshots: false,
+        precheck_include_in_app_purchases: false, # API key doesn't support IAP precheck
+        team_id: "128579436",
+        dev_portal_team_id: "686BSNR73Z"
+      )
+    rescue => ex
+      if ex.message.include?("No data") || ex.message.include?("no app version")
+        UI.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        UI.error("No app version found in App Store Connect")
+        UI.error("")
+        UI.error("This means you need to create version 1.0 first:")
+        UI.error("  1. Go to https://appstoreconnect.apple.com")
+        UI.error("  2. Select your app (Obsession Tracker)")
+        UI.error("  3. Create version 1.0 and upload a build")
+        UI.error("  4. Then run: bundle exec fastlane ios metadata")
+        UI.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+      else
+        raise ex
+      end
+    end
+  end
+
+  # Device configurations for App Store screenshots
+  # Format: { name: display_name, id: simulator_uuid, device_prefix: Fastlane naming prefix, target_size: [width, height] }
+  # Note: Screenshots go in en-US/ folder with naming: {index}_APP_{DEVICE_PREFIX}_{order}.png
+  SCREENSHOT_DEVICES = {
+    iphone: {
+      name: "iPhone 17 Pro Max",
+      id: "16427252-F942-49CA-A0B3-4FEB128B70CA",
+      device_prefix: "APP_IPHONE_67",  # Fastlane naming for 6.7"/6.9" iPhones
+      target_size: [1290, 2796]        # App Store dimensions for 6.7" display
+    },
+    ipad: {
+      name: "iPad Pro 13-inch (M5)",
+      id: "77B2929B-56D2-4FCD-8DAB-D4A62773E1EE",
+      device_prefix: "APP_IPAD_PRO_3GEN_129",  # Fastlane naming for iPad Pro 12.9"
+      target_size: [2048, 2732]                 # App Store dimensions for iPad Pro 12.9"
+    }
+  }
+
+  # Screenshot names matching App Store categories
+  SCREENSHOT_NAMES = [
+    "01_tracking",
+    "02_sessions",
+    "03_routes",
+    "04_settings",
+    "05_map"
+  ]
+
+  desc "Generate screenshots for App Store. Usage: screenshots_generate [iphone|ipad] (no arg = both)"
+  lane :screenshots_generate do |options|
+    # Check for device type - support multiple syntaxes:
+    # - device_type:iphone (explicit key-value)
+    # - iphone:true (boolean flag)
+    # - iphone (bare positional arg via ARGV)
+    valid_devices = %w[iphone ipad]
+    device_arg = options[:device_type]&.to_s ||
+                 options[:device]&.to_s ||
+                 options.keys.map(&:to_s).find { |k| valid_devices.include?(k) } ||
+                 ARGV.find { |arg| valid_devices.include?(arg) }
+
+    if device_arg
+      # Single device specified
+      unless valid_devices.include?(device_arg)
+        UI.user_error!("Invalid device type '#{device_arg}'. Use: iphone or ipad")
+      end
+      generate_device_screenshots(device_type: device_arg.to_sym)
+      UI.success("✅ #{device_arg.capitalize} screenshots generated!")
+    else
+      # No device specified - generate both
+      UI.header("Generating ALL screenshots (iPhone + iPad)")
+
+      # Generate iPhone screenshots
+      generate_device_screenshots(device_type: :iphone)
+
+      # Generate iPad screenshots
+      generate_device_screenshots(device_type: :ipad)
+
+      UI.success("✅ All screenshots generated!")
+    end
+
+    UI.message("📁 Screenshots saved to: fastlane/screenshots/en-US/")
+    UI.message("")
+    UI.message("To upload screenshots to App Store Connect, run:")
+    UI.message("  fastlane ios screenshots_upload")
+  end
+
+  desc "Generate screenshots for a specific device type (:iphone or :ipad)"
+  lane :generate_device_screenshots do |options|
+    # Convert string to symbol if passed from command line (e.g., "ipad" -> :ipad)
+    device_type = (options[:device_type] || :iphone).to_sym
+    device_config = SCREENSHOT_DEVICES[device_type]
+    bundle_id = ENV["APP_IDENTIFIER"] || "com.obsessioncommunity.tracker"
+
+    UI.header("Generating #{device_config[:name]} screenshots")
+
+    # Clean up any orphaned simulators from previous runs (Ctrl+C or crashes)
+    UI.message("🧹 Cleaning up any orphaned simulators...")
+    system("xcrun simctl shutdown all 2>/dev/null")
+    sleep(2)
+
+    device = device_config[:id]
+    device_prefix = device_config[:device_prefix]
+    target_size = device_config[:target_size]
+
+    # Screenshots go directly in en-US folder with Fastlane naming
+    target_dir = "fastlane/screenshots/en-US"
+
+    # Ensure we're in the Flutter project root
+    Dir.chdir("..") do
+      sh("flutter", "pub", "get")
+
+      # Boot simulator
+      UI.message("Booting #{device_config[:name]}...")
+      sh("xcrun", "simctl", "boot", device) rescue UI.message("Simulator already booted")
+      sh("open", "-a", "Simulator")
+      sleep(5)
+
+      # Enable dark mode
+      UI.message("🌙 Enabling dark mode...")
+      sh("xcrun", "simctl", "ui", device, "appearance", "dark")
+
+      # Set simulator GPS location to Grand Staircase-Escalante, Utah (where demo data is located)
+      # This area shows BLM land adjacent to NPS (Capitol Reef, Glen Canyon) for land rights demo
+      UI.message("Setting GPS location to Grand Staircase-Escalante, UT (37.72, -111.42)...")
+      sh("xcrun", "simctl", "location", device, "set", "37.72,-111.42")
+
+      # 1. Uninstall any existing app (clears old permissions)
+      UI.message("Uninstalling existing app...")
+      sh("xcrun", "simctl", "uninstall", device, bundle_id) rescue UI.message("App wasn't installed")
+
+      # 2. Build the app for simulator (but don't install yet)
+      UI.message("Building app for simulator...")
+      sh("flutter", "build", "ios", "--simulator", "--debug")
+
+      # 3. Install the app (without launching)
+      app_path = "build/ios/iphonesimulator/Obsession.app"
+      UI.message("Installing app from #{app_path}...")
+      sh("xcrun", "simctl", "install", device, app_path)
+
+      # 4. Grant location permission AFTER install but BEFORE launch
+      UI.message("Granting location permission...")
+      sh("xcrun", "simctl", "privacy", device, "grant", "location-always", bundle_id)
+
+      # 5. Copy fixture files to app's tmp directory inside its container
+      fixtures_source = "integration_test/fixtures/states/UT"
+      if Dir.exist?(fixtures_source) && !Dir.empty?(fixtures_source)
+        UI.message("📦 Copying fixture files to app container...")
+        # Get the app's data container path (created during install step above)
+        app_container = `xcrun simctl get_app_container #{device} #{bundle_id} data 2>/dev/null`.strip
+        if app_container.empty?
+          UI.important("⚠️ Could not get app container - fixtures will not be loaded")
+        else
+          # Copy to the app's tmp directory which Dart's Directory.systemTemp points to
+          fixtures_dest = "#{app_container}/tmp/obsession-fixtures/states/UT"
+          sh("mkdir", "-p", fixtures_dest)
+          Dir.glob("#{fixtures_source}/*.zip").each do |zip_file|
+            sh("cp", zip_file, fixtures_dest)
+            UI.message("  📄 Copied #{File.basename(zip_file)}")
+          end
+          UI.success("✅ UT fixture files copied to #{fixtures_dest}")
+
+          # Copy WY historical map fixture for historical map screenshot
+          wy_fixtures_source = "integration_test/fixtures/states/WY/historical_maps"
+          if Dir.exist?(wy_fixtures_source) && !Dir.empty?(wy_fixtures_source)
+            wy_fixtures_dest = "#{app_container}/tmp/obsession-fixtures/states/WY/historical_maps"
+            sh("mkdir", "-p", wy_fixtures_dest)
+            Dir.glob("#{wy_fixtures_source}/*.mbtiles").each do |mbtiles_file|
+              sh("cp", mbtiles_file, wy_fixtures_dest)
+              UI.message("  📄 Copied #{File.basename(mbtiles_file)}")
+            end
+            UI.success("✅ WY historical map fixtures copied to #{wy_fixtures_dest}")
+          else
+            UI.important("⚠️ No WY historical map fixtures found - historical map screenshot will not have overlay")
+          end
+        end
+      else
+        UI.important("⚠️ No fixture files found at #{fixtures_source} - land data will not appear in screenshots")
+      end
+
+      # Create target directory
+      sh("mkdir", "-p", target_dir)
+
+      # 5. Run flutter drive - screenshots are taken by the test itself
+      # Pass device prefix via environment variable for the driver to use
+      UI.message("Running flutter drive (screenshots handled by test)...")
+      ENV["SCREENSHOT_DEVICE_PREFIX"] = device_prefix
+      sh(
+        "flutter", "drive",
+        "--driver=test_driver/integration_test.dart",
+        "--target=integration_test/screenshots_test.dart",
+        "-d", device,
+        "--no-build"
+      )
+
+      UI.success("✅ #{device_config[:name]} screenshots captured!")
+
+      # Resize screenshots to App Store required dimensions
+      if target_size
+        UI.message("Resizing screenshots to #{target_size[0]}x#{target_size[1]}...")
+        Dir.glob("#{target_dir}/*#{device_prefix}*.png").sort.each do |f|
+          sh("sips", "-z", target_size[1].to_s, target_size[0].to_s, f, out: File::NULL, err: File::NULL)
+          UI.message("  📐 Resized: #{File.basename(f)}")
+        end
+      end
+
+      UI.success("✅ #{device_config[:name]} screenshots complete!")
+
+      # List the screenshots with dimensions
+      Dir.glob("#{target_dir}/*#{device_prefix}*.png").sort.each do |f|
+        dimensions = `sips -g pixelWidth -g pixelHeight "#{f}" 2>/dev/null | grep pixel | awk '{print $2}' | tr '\n' 'x'`.chomp.sub(/x$/, '')
+        UI.message("  📷 #{File.basename(f)} (#{dimensions})")
+      end
+    end
+  end
+
+  desc "Download current screenshots from App Store Connect (creates correct folder structure)"
+  lane :screenshots_download do
+    # Add API key auth if configured
+    if ENV["APP_STORE_CONNECT_API_KEY_ID"]
+      # Key file location: fastlane/AuthKey_{KEY_ID}.p8 (gitignored)
+      key_path = ENV["APP_STORE_CONNECT_API_KEY_PATH"] ||
+                 "fastlane/AuthKey_#{ENV['APP_STORE_CONNECT_API_KEY_ID']}.p8"
+
+      # Create temporary API key JSON file for CLI
+      api_key_json = {
+        "key_id" => ENV["APP_STORE_CONNECT_API_KEY_ID"],
+        "issuer_id" => ENV["APP_STORE_CONNECT_API_ISSUER_ID"],
+        "key" => File.read(key_path),
+        "in_house" => false
+      }
+      File.write("api_key.json", JSON.generate(api_key_json))
+
+      sh("bundle", "exec", "fastlane", "deliver", "download_screenshots",
+         "--app_identifier", ENV["APP_IDENTIFIER"] || "com.obsessioncommunity.tracker",
+         "--screenshots_path", "screenshots",
+         "--api_key_path", "api_key.json")
+
+      # Clean up temp file
+      File.delete("api_key.json") if File.exist?("api_key.json")
+    else
+      sh("bundle", "exec", "fastlane", "deliver", "download_screenshots",
+         "--app_identifier", ENV["APP_IDENTIFIER"] || "com.obsessioncommunity.tracker",
+         "--screenshots_path", "screenshots")
+    end
+
+    UI.success("✅ Screenshots downloaded to fastlane/screenshots/")
+    UI.message("Check the folder structure for the correct device folder names")
+  end
+
+  desc "Upload screenshots to App Store Connect"
+  lane :screenshots_upload do
+    # Set up authentication
+    # Key file location: fastlane/AuthKey_{KEY_ID}.p8 (gitignored)
+    if ENV["APP_STORE_CONNECT_API_KEY_ID"]
+      key_path = ENV["APP_STORE_CONNECT_API_KEY_PATH"] ||
+                 "fastlane/AuthKey_#{ENV['APP_STORE_CONNECT_API_KEY_ID']}.p8"
+      app_store_connect_api_key(
+        key_id: ENV["APP_STORE_CONNECT_API_KEY_ID"],
+        issuer_id: ENV["APP_STORE_CONNECT_API_ISSUER_ID"],
+        key_filepath: key_path,
+        duration: 1200,
+        in_house: false
+      )
+    end
+
+    # List screenshots being uploaded
+    screenshot_dir = "screenshots/en-US"
+    screenshots = Dir.glob("#{screenshot_dir}/*.png")
+    UI.message("Found #{screenshots.count} screenshots to upload:")
+    screenshots.sort.each { |f| UI.message("  📷 #{File.basename(f)}") }
+
+    # Use default screenshots path (fastlane/screenshots)
+    deliver(
+      app_identifier: ENV["APP_IDENTIFIER"] || "com.obsessioncommunity.tracker",
+      skip_binary_upload: true,
+      skip_metadata: true,
+      overwrite_screenshots: true,
+      precheck_include_in_app_purchases: false,
+      force: true,
+      team_id: "128579436",
+      dev_portal_team_id: "686BSNR73Z"
+    )
+
+    UI.success("✅ Screenshots uploaded to App Store Connect!")
+  end
+
+  desc "Generate AND upload all screenshots to App Store Connect"
+  lane :screenshots_full do
+    screenshots_generate
+    screenshots_upload
+  end
+
+  desc "Deploy a new version to the App Store (builds and submits)"
+  lane :release do |options|
+    # Set up environment
+    setup_ci if ENV['CI']
+
+    # Get build number
+    build_number = options[:build_number] || number_of_commits
+
+    # Build the app using beta lane logic
+    beta(build_number: build_number)
+
+    # Set up code signing with App Store Connect API (if configured)
+    # Key file location: fastlane/AuthKey_{KEY_ID}.p8 (gitignored)
+    if ENV["APP_STORE_CONNECT_API_KEY_ID"]
+      key_path = ENV["APP_STORE_CONNECT_API_KEY_PATH"] ||
+                 "fastlane/AuthKey_#{ENV['APP_STORE_CONNECT_API_KEY_ID']}.p8"
+      app_store_connect_api_key(
+        key_id: ENV["APP_STORE_CONNECT_API_KEY_ID"],
+        issuer_id: ENV["APP_STORE_CONNECT_API_ISSUER_ID"],
+        key_filepath: key_path,
+        duration: 1200,
+        in_house: false
+      )
+    end
+
+    # Submit for review
+    deliver(
+      submit_for_review: true,
+      automatic_release: true,
+      force: true,
+      team_id: "128579436",
+      dev_portal_team_id: "686BSNR73Z"
+    )
+  end
+
+  desc "Submit existing TestFlight build to App Store for review (no rebuild)"
+  lane :submit_for_review do |options|
+    # This lane submits an EXISTING TestFlight build to the App Store for review.
+    # Use this when you already have a build in TestFlight that you want to release.
+    #
+    # Usage:
+    #   fastlane ios submit_for_review                    # Uses latest build
+    #   fastlane ios submit_for_review build_number:123   # Uses specific build
+    #   fastlane ios submit_for_review version:1.0.0      # For specific version
+
+    # Set up App Store Connect API authentication
+    if ENV["APP_STORE_CONNECT_API_KEY_ID"]
+      key_path = ENV["APP_STORE_CONNECT_API_KEY_PATH"] ||
+                 "fastlane/AuthKey_#{ENV['APP_STORE_CONNECT_API_KEY_ID']}.p8"
+      app_store_connect_api_key(
+        key_id: ENV["APP_STORE_CONNECT_API_KEY_ID"],
+        issuer_id: ENV["APP_STORE_CONNECT_API_ISSUER_ID"],
+        key_filepath: key_path,
+        duration: 1200,
+        in_house: false
+      )
+    end
+
+    # Build options for deliver
+    deliver_options = {
+      app_identifier: ENV["APP_IDENTIFIER"] || "com.obsessioncommunity.tracker",
+      submit_for_review: true,
+      automatic_release: options[:automatic_release] != false, # Default true
+      force: true,                    # Skip verification prompts
+      skip_binary_upload: true,       # Don't upload new binary - use existing
+      skip_screenshots: true,         # Don't update screenshots
+      skip_metadata: false,           # Upload metadata from files
+      precheck_include_in_app_purchases: false,
+      team_id: "128579436",
+      dev_portal_team_id: "686BSNR73Z",
+      submission_information: {
+        add_id_info_serves_ads: false,
+        add_id_info_tracks_action: false,
+        add_id_info_tracks_install: false,
+        add_id_info_uses_idfa: false,
+        content_rights_has_rights: true,
+        content_rights_contains_third_party_content: true,
+        export_compliance_uses_encryption: true,
+        export_compliance_is_exempt: true,
+        export_compliance_contains_proprietary_cryptography: false,
+        export_compliance_contains_third_party_cryptography: false
+      }
+    }
+
+    # If specific build number provided, use it
+    if options[:build_number]
+      deliver_options[:build_number] = options[:build_number].to_s
+      UI.message("Submitting build #{options[:build_number]} for review...")
+    else
+      UI.message("Submitting latest TestFlight build for review...")
+    end
+
+    # If version provided, use it
+    if options[:version]
+      deliver_options[:app_version] = options[:version]
+    end
+
+    deliver(deliver_options)
+
+    UI.success("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    UI.success("✅ App submitted for review!")
+    UI.success("")
+    UI.success("Next steps:")
+    UI.success("  1. Check App Store Connect for review status")
+    UI.success("  2. Respond to any reviewer questions")
+    UI.success("  3. Once approved, your app will be released automatically")
+    UI.success("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+  end
+
+  desc "Run tests"
+  lane :test do
+    run_tests(
+      workspace: "ios/Runner.xcworkspace",
+      scheme: "Runner",
+      devices: ["iPhone 15 Pro"],
+      xcargs: "DEVELOPMENT_TEAM=686BSNR73Z"
+    )
+  end
+
+  desc "Increment build number"
+  lane :bump_build do
+    build_number = number_of_commits
+    increment_build_number(
+      build_number: build_number,
+      xcodeproj: "ios/Runner.xcodeproj"
+    )
+    UI.success("Build number updated to: #{build_number}")
+  end
+
+  desc "Clear all TestFlight data (testers, test info, beta groups) for app transfer"
+  lane :transfer_prepare do
+    # Set up App Store Connect API authentication
+    if ENV["APP_STORE_CONNECT_API_KEY_ID"]
+      key_path = ENV["APP_STORE_CONNECT_API_KEY_PATH"] ||
+                 "fastlane/AuthKey_#{ENV['APP_STORE_CONNECT_API_KEY_ID']}.p8"
+      app_store_connect_api_key(
+        key_id: ENV["APP_STORE_CONNECT_API_KEY_ID"],
+        issuer_id: ENV["APP_STORE_CONNECT_API_ISSUER_ID"],
+        key_filepath: key_path,
+        duration: 1200,
+        in_house: false
+      )
+    else
+      UI.user_error!("APP_STORE_CONNECT_API_KEY_ID is required")
+    end
+
+    bundle_id = ENV["APP_IDENTIFIER"] || "com.obsessioncommunity.tracker"
+    app = Spaceship::ConnectAPI::App.find(bundle_id)
+    UI.user_error!("Could not find app #{bundle_id}") unless app
+
+    UI.header("Preparing #{app.name} for transfer")
+
+    # 1. Remove all beta testers from this app
+    UI.message("")
+    UI.header("Removing Beta Testers")
+    begin
+      testers = Spaceship::ConnectAPI::BetaTester.all(filter: { apps: app.id })
+      if testers.empty?
+        UI.success("  No beta testers found")
+      else
+        UI.message("  Found #{testers.count} tester(s) to remove")
+        # Batch delete testers from app
+        tester_ids = testers.map(&:id)
+        # Delete in batches of 50 to avoid API limits
+        tester_ids.each_slice(50) do |batch|
+          Spaceship::ConnectAPI.delete_beta_testers_from_app(
+            beta_tester_ids: batch,
+            app_id: app.id
+          )
+          UI.message("  Removed batch of #{batch.count} tester(s)")
+        end
+        UI.success("  All #{testers.count} tester(s) removed!")
+      end
+    rescue => e
+      UI.error("  Error removing testers: #{e.message}")
+    end
+
+    # 2. Remove all beta groups
+    UI.message("")
+    UI.header("Removing Beta Groups")
+    begin
+      groups = Spaceship::ConnectAPI.get_beta_groups(
+        filter: { app: app.id },
+        limit: 50
+      ).all_pages.flat_map(&:to_models)
+      if groups.empty?
+        UI.success("  No beta groups found")
+      else
+        groups.each do |g|
+          group_type = g.is_internal_group ? "internal" : "external"
+          UI.message("  Deleting group: #{g.name} (#{group_type})...")
+          begin
+            Spaceship::ConnectAPI.delete_beta_group(beta_group_id: g.id)
+            UI.success("    Deleted!")
+          rescue => e
+            UI.error("    Failed: #{e.message}")
+          end
+        end
+      end
+    rescue => e
+      UI.error("  Error with beta groups: #{e.message}")
+    end
+
+    # 3. Clear Test Information (beta app localizations)
+    UI.message("")
+    UI.header("Clearing Test Information")
+    begin
+      localizations = app.get_beta_app_localizations
+      if localizations.empty?
+        UI.success("  No test information localizations found")
+      else
+        localizations.each do |loc|
+          UI.message("  Clearing test info for locale: #{loc.locale}...")
+          UI.message("    Current: feedback_email=#{loc.feedback_email}, description=#{loc.description&.slice(0, 50)}")
+          Spaceship::ConnectAPI.patch_beta_app_localizations(
+            localization_id: loc.id,
+            attributes: {
+              feedbackEmail: "",
+              marketingUrl: "",
+              privacyPolicyUrl: "",
+              tvOsPrivacyPolicy: "",
+              description: ""
+            }
+          )
+          UI.success("    Cleared!")
+        end
+      end
+    rescue => e
+      UI.error("  Error clearing test info: #{e.message}")
+    end
+
+    # 4. Clear Beta App Review Detail (contact info, demo account)
+    UI.message("")
+    UI.header("Clearing Beta App Review Detail")
+    begin
+      review_detail = Spaceship::ConnectAPI.get_beta_app_review_detail(
+        filter: { app: app.id }
+      ).all_pages.flat_map(&:to_models)
+      if review_detail.empty?
+        UI.success("  No beta review detail found")
+      else
+        review_detail.each do |rd|
+          UI.message("  Current: contact=#{rd.contact_first_name} #{rd.contact_last_name}, email=#{rd.contact_email}")
+          Spaceship::ConnectAPI.patch_beta_app_review_detail(
+            app_id: rd.id,
+            attributes: {
+              contactFirstName: "",
+              contactLastName: "",
+              contactPhone: "",
+              contactEmail: "",
+              demoAccountName: "",
+              demoAccountPassword: "",
+              demoAccountRequired: false,
+              notes: ""
+            }
+          )
+          UI.success("    Cleared!")
+        end
+      end
+    rescue => e
+      UI.error("  Error clearing review detail: #{e.message}")
+    end
+
+    UI.message("")
+    UI.success("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    UI.success("TestFlight cleanup complete!")
+    UI.success("")
+    UI.success("Next: Go to App Store Connect > App Information > Transfer App")
+    UI.success("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+  end
+
+  desc "Diagnose what's blocking an app transfer on App Store Connect"
+  lane :transfer_check do
+    # Set up App Store Connect API authentication
+    if ENV["APP_STORE_CONNECT_API_KEY_ID"]
+      key_path = ENV["APP_STORE_CONNECT_API_KEY_PATH"] ||
+                 "fastlane/AuthKey_#{ENV['APP_STORE_CONNECT_API_KEY_ID']}.p8"
+      app_store_connect_api_key(
+        key_id: ENV["APP_STORE_CONNECT_API_KEY_ID"],
+        issuer_id: ENV["APP_STORE_CONNECT_API_ISSUER_ID"],
+        key_filepath: key_path,
+        duration: 1200,
+        in_house: false
+      )
+    else
+      UI.user_error!("APP_STORE_CONNECT_API_KEY_ID is required")
+    end
+
+    bundle_id = ENV["APP_IDENTIFIER"] || "com.obsessioncommunity.tracker"
+    app = Spaceship::ConnectAPI::App.find(bundle_id)
+    UI.user_error!("Could not find app #{bundle_id}") unless app
+
+    UI.header("Transfer Readiness Check for #{app.name}")
+
+    # Check App Store versions
+    UI.message("")
+    UI.header("App Store Versions")
+    versions = app.get_app_store_versions
+    blocking_states = %w[WAITING_FOR_REVIEW IN_REVIEW PENDING_DEVELOPER_RELEASE PROCESSING_FOR_APP_STORE DEVELOPER_ACTION_NEEDED]
+    versions.each do |v|
+      state_label = v.app_store_state
+      is_blocker = blocking_states.include?(state_label)
+      if is_blocker
+        UI.error("  #{v.platform} #{v.version_string} - #{state_label} [BLOCKER]")
+      else
+        UI.message("  #{v.platform} #{v.version_string} - #{state_label}")
+      end
+    end
+
+    # Check active builds
+    UI.message("")
+    UI.header("Active Builds")
+    all_builds = Spaceship::ConnectAPI::Build.all(app_id: app.id, limit: 200, sort: "-uploadedDate")
+    non_expired = all_builds.reject(&:expired)
+    if non_expired.empty?
+      UI.success("  All builds expired!")
+    else
+      UI.error("  #{non_expired.count} active (non-expired) builds remain [BLOCKER]")
+      non_expired.first(5).each do |b|
+        prv = b.pre_release_version
+        UI.error("    #{prv&.version} build #{b.version} [#{prv&.platform}]")
+      end
+    end
+
+    # Check beta groups
+    UI.message("")
+    UI.header("Beta Groups (TestFlight)")
+    begin
+      groups = Spaceship::ConnectAPI.get_beta_groups(filter: { app: app.id }, limit: 50).all_pages.flat_map(&:to_models)
+      if groups.empty?
+        UI.success("  No beta groups found")
+      else
+        groups.each do |g|
+          group_type = g.is_internal_group ? "internal" : "external"
+          public_link = g.public_link_enabled rescue false
+          UI.important("  #{g.name} (#{group_type}) - public link: #{public_link}")
+        end
+        UI.important("  #{groups.count} beta group(s) found - may need to be removed")
+      end
+    rescue => e
+      UI.error("  Error checking beta groups: #{e.message}")
+    end
+
+    # Check beta app review submission
+    UI.message("")
+    UI.header("Beta App Review")
+    begin
+      submissions = Spaceship::ConnectAPI.get_beta_app_review_submissions(filter: { app: app.id }, limit: 10).all_pages.flat_map(&:to_models)
+      if submissions.empty?
+        UI.success("  No pending beta review submissions")
+      else
+        submissions.each do |s|
+          UI.important("  Beta review: #{s.beta_review_state}")
+        end
+      end
+    rescue => e
+      UI.message("  Could not check beta reviews: #{e.message}")
+    end
+
+    UI.message("")
+    UI.header("Summary")
+    UI.message("If transfer is still blocked, common remaining issues:")
+    UI.message("  1. Pending app version (cancel in App Store Connect)")
+    UI.message("  2. Active TestFlight testing (remove beta groups/testers)")
+    UI.message("  3. App uses iCloud/Passbook/Wallet (receiving account must support)")
+    UI.message("  4. App is in an app bundle")
+    UI.message("  5. Pending agreements on either account")
+  end
+
+  desc "Expire all TestFlight builds (iOS + macOS) to prepare for app transfer"
+  lane :expire_builds do
+    # Set up App Store Connect API authentication
+    if ENV["APP_STORE_CONNECT_API_KEY_ID"]
+      key_path = ENV["APP_STORE_CONNECT_API_KEY_PATH"] ||
+                 "fastlane/AuthKey_#{ENV['APP_STORE_CONNECT_API_KEY_ID']}.p8"
+      app_store_connect_api_key(
+        key_id: ENV["APP_STORE_CONNECT_API_KEY_ID"],
+        issuer_id: ENV["APP_STORE_CONNECT_API_ISSUER_ID"],
+        key_filepath: key_path,
+        duration: 1200,
+        in_house: false
+      )
+    else
+      UI.user_error!("APP_STORE_CONNECT_API_KEY_ID is required")
+    end
+
+    bundle_id = ENV["APP_IDENTIFIER"] || "com.obsessioncommunity.tracker"
+    app = Spaceship::ConnectAPI::App.find(bundle_id)
+    UI.user_error!("Could not find app #{bundle_id}") unless app
+
+    UI.header("Expiring all builds for #{bundle_id}")
+    UI.message("Required before transferring app to another account")
+
+    # Fetch all active builds across all platforms (iOS + macOS)
+    # processing_states default filters to PROCESSING,FAILED,INVALID,VALID (excludes already expired)
+    all_builds = Spaceship::ConnectAPI::Build.all(
+      app_id: app.id,
+      limit: 200,
+      sort: "-uploadedDate"
+    )
+
+    if all_builds.empty?
+      UI.success("No builds found! Ready for transfer.")
+      return
+    end
+
+    active_builds = all_builds.reject(&:expired)
+
+    if active_builds.empty?
+      UI.success("All #{all_builds.count} builds are already expired! Ready for transfer.")
+      return
+    end
+
+    already_expired = all_builds.count - active_builds.count
+    UI.message("Found #{active_builds.count} active build(s) to expire (#{already_expired} already expired)")
+    UI.message("")
+
+    expired_count = 0
+    error_count = 0
+
+    active_builds.each do |build|
+      app_version = build.pre_release_version&.version || "?"
+      platform = build.pre_release_version&.platform || "?"
+      label = "#{app_version} build #{build.version} [#{platform}]"
+      begin
+        UI.message("  Expiring #{label}...")
+        build.update(attributes: { expired: true })
+        expired_count += 1
+      rescue => ex
+        UI.error("  Failed to expire #{label}: #{ex.message}")
+        error_count += 1
+      end
+    end
+
+    UI.success("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    UI.success("Build expiration complete!")
+    UI.success("  Expired: #{expired_count}")
+    UI.success("  Already expired: #{already_expired}")
+    UI.error("  Errors: #{error_count}") if error_count > 0
+    UI.success("")
+    UI.success("Next: Verify in App Store Connect, then transfer the app")
+    UI.success("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+  end
+
+  # Error handling
+  error do |lane, exception|
+    if exception.message.include?("No data") || exception.message.include?("no app version")
+      UI.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+      UI.error("No app version found in App Store Connect")
+      UI.error("")
+      UI.error("You need to create version 1.0 first:")
+      UI.error("  1. Go to https://appstoreconnect.apple.com")
+      UI.error("  2. Select your app (Obsession Tracker)")
+      UI.error("  3. Create version 1.0 and upload a build")
+      UI.error("  4. Then run: bundle exec fastlane ios metadata")
+      UI.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    else
+      UI.error("Error in lane #{lane}: #{exception.message}")
+    end
+  end
+end
+
+platform :mac do
+  before_all do
+    ENV["FASTLANE_TEAM_ID"] = "686BSNR73Z"
+    ENV["FASTLANE_ITC_TEAM_ID"] = "128579436"
+  end
+
+  # ============================================================
+  # macOS Screenshot Configuration
+  # ============================================================
+  # App Store macOS screenshot requirements:
+  # - Minimum: 1280x800
+  # - Recommended: 2880x1800 (16" MacBook Pro Retina)
+  # - Format: PNG or JPEG, no alpha
+  #
+  # Folder structure: screenshots_mac/en-US/ (separate from iOS to avoid display type conflicts)
+  # Naming: {index}_APP_DESKTOP_0.png
+
+  MAC_SCREENSHOT_DEVICES = {
+    mac: {
+      name: "MacBook Pro",
+      device_prefix: "APP_DESKTOP",
+      target_size: [2880, 1800]  # 16" MacBook Pro Retina
+    }
+  }
+
+  desc "Push a new beta build to TestFlight for macOS"
+  lane :beta do |options|
+    # Set up environment
+    setup_ci if ENV['CI']
+
+    # Get build number from options or calculate from git
+    build_number = options[:build_number] || number_of_commits
+
+    # Ensure we're in the correct directory for Flutter
+    Dir.chdir("..") do
+      # Run Flutter build
+      sh("flutter", "pub", "get")
+      sh("flutter", "clean") unless ENV["SKIP_FLUTTER_CLEAN"]
+      sh("flutter", "build", "macos", "--release")
+    end
+
+    # Set up code signing with App Store Connect API (if configured)
+    if ENV["APP_STORE_CONNECT_API_KEY_ID"]
+      key_path = ENV["APP_STORE_CONNECT_API_KEY_PATH"] ||
+                 "fastlane/AuthKey_#{ENV['APP_STORE_CONNECT_API_KEY_ID']}.p8"
+      app_store_connect_api_key(
+        key_id: ENV["APP_STORE_CONNECT_API_KEY_ID"],
+        issuer_id: ENV["APP_STORE_CONNECT_API_ISSUER_ID"],
+        key_filepath: key_path,
+        duration: 1200,
+        in_house: false
+      )
+    end
+
+    # Archive the macOS app
+    # Note: We use xcodebuild directly because gym/build_mac_app doesn't handle
+    # the framework symlink fix needed for sqlite3arm64macos.framework
+    archive_path = "build/macos/ObsessionTracker.xcarchive"
+
+    Dir.chdir("..") do
+      UI.message("Archiving macOS app...")
+      sh(
+        "xcodebuild",
+        "-workspace", "macos/Runner.xcworkspace",
+        "-scheme", "Runner",
+        "-configuration", "Release",
+        "-archivePath", archive_path,
+        "-allowProvisioningUpdates",
+        "archive"
+      )
+
+      # Fix malformed framework symlink (ITMS-90291)
+      # sqlite3arm64macos.framework has Resources -> Versions/A/Resources
+      # but Apple requires Resources -> Versions/Current/Resources
+      framework_path = "#{archive_path}/Products/Applications/obsession_tracker.app/Contents/Frameworks/sqlite3arm64macos.framework"
+      if File.exist?(framework_path)
+        resources_link = "#{framework_path}/Resources"
+        if File.symlink?(resources_link)
+          current_target = File.readlink(resources_link)
+          if current_target.include?("Versions/A/")
+            UI.message("Fixing sqlite3arm64macos.framework symlink...")
+            FileUtils.rm(resources_link)
+            FileUtils.ln_s("Versions/Current/Resources", resources_link)
+            UI.success("Fixed Resources symlink: now points to Versions/Current/Resources")
+          end
+        end
+      end
+
+      # Export the archive for App Store distribution
+      UI.message("Exporting archive for App Store...")
+
+      # Create export options plist
+      export_options = {
+        "method" => "app-store-connect",
+        "destination" => "upload",
+        "teamID" => ENV["DEVELOPMENT_TEAM"] || "686BSNR73Z"
+      }
+      export_plist_path = "build/macos/ExportOptions.plist"
+      File.write(export_plist_path, export_options.to_plist)
+
+      sh(
+        "xcodebuild",
+        "-exportArchive",
+        "-archivePath", archive_path,
+        "-exportOptionsPlist", export_plist_path,
+        "-allowProvisioningUpdates"
+      )
+    end
+
+    UI.success("✅ macOS build uploaded to TestFlight!")
+
+    # Clean up build artifacts
+    clean_build_artifacts
+  end
+
+  desc "Upload metadata (text only) to App Store Connect for macOS - NO screenshots"
+  lane :metadata do |options|
+    # macOS shares metadata with iOS via Universal Purchase
+    # Uses the same en-US folder as iOS
+    # Pass version:X.Y.Z to target a specific version
+    begin
+      if ENV["APP_STORE_CONNECT_API_KEY_ID"]
+        key_path = ENV["APP_STORE_CONNECT_API_KEY_PATH"] ||
+                   "fastlane/AuthKey_#{ENV['APP_STORE_CONNECT_API_KEY_ID']}.p8"
+        app_store_connect_api_key(
+          key_id: ENV["APP_STORE_CONNECT_API_KEY_ID"],
+          issuer_id: ENV["APP_STORE_CONNECT_API_ISSUER_ID"],
+          key_filepath: key_path,
+          duration: 1200,
+          in_house: false
+        )
+      end
+
+      deliver_options = {
+        app_identifier: ENV["APP_IDENTIFIER"] || "com.obsessioncommunity.tracker",
+        platform: "osx",
+        submit_for_review: false,
+        automatic_release: false,
+        force: true,
+        skip_binary_upload: true,
+        skip_screenshots: true,
+        overwrite_screenshots: false,
+        precheck_include_in_app_purchases: false,
+        team_id: "128579436",
+        dev_portal_team_id: "686BSNR73Z"
+      }
+
+      # Add app_version if specified
+      if options[:version]
+        deliver_options[:app_version] = options[:version]
+      end
+
+      deliver(deliver_options)
+    rescue => ex
+      if ex.message.include?("No data") || ex.message.include?("no app version")
+        UI.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        UI.error("No macOS app version found in App Store Connect")
+        UI.error("")
+        UI.error("Make sure you have a macOS version created:")
+        UI.error("  1. Go to https://appstoreconnect.apple.com")
+        UI.error("  2. Select your app (Obsession Tracker)")
+        UI.error("  3. Create macOS version and upload a build")
+        UI.error("  4. Then run: bundle exec fastlane mac metadata")
+        UI.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+      else
+        raise ex
+      end
+    end
+  end
+
+  desc "Instructions for macOS App Store screenshots (manual capture required)"
+  lane :screenshots_generate do
+    # NOTE: Automated screenshot generation via flutter drive/test doesn't work on macOS
+    # because the Mapbox plugin's native platform channels don't initialize properly
+    # in the test environment. This is a known Flutter limitation with native plugins
+    # on desktop platforms.
+    #
+    # MANUAL SCREENSHOT WORKFLOW:
+    # 1. Run the app: flutter run -d macos
+    # 2. Navigate through the app and take screenshots (Cmd+Shift+4)
+    # 3. Resize to 2880x1800 using: sips -z 1800 2880 screenshot.png
+    # 4. Save to fastlane/screenshots/en-US/ with naming: {index}_APP_DESKTOP_MAC_0.png
+    # 5. Upload: fastlane mac screenshots_upload
+
+    device_config = MAC_SCREENSHOT_DEVICES[:mac]
+    target_size = device_config[:target_size]
+    target_dir = "fastlane/screenshots_mac/en-US"
+
+    UI.header("macOS Screenshot Instructions")
+    UI.important("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    UI.important("⚠️  Automated screenshot generation is not supported on macOS")
+    UI.important("")
+    UI.important("The Mapbox Flutter plugin's native platform channels don't")
+    UI.important("work properly with flutter drive/test on macOS desktop.")
+    UI.important("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    UI.message("")
+    UI.message("📸 MANUAL SCREENSHOT WORKFLOW:")
+    UI.message("")
+    UI.message("1. Run the app:")
+    UI.message("   flutter run -d macos")
+    UI.message("")
+    UI.message("2. Take screenshots (Cmd+Shift+4 or Cmd+Shift+5)")
+    UI.message("   Capture these screens:")
+    UI.message("   - Map with land overlay")
+    UI.message("   - Sessions list")
+    UI.message("   - Session detail")
+    UI.message("   - Routes list")
+    UI.message("   - Achievements")
+    UI.message("")
+    UI.message("3. Resize screenshots to #{target_size[0]}x#{target_size[1]}:")
+    UI.message("   sips -z #{target_size[1]} #{target_size[0]} screenshot.png")
+    UI.message("")
+    UI.message("4. Save to #{target_dir}/ with naming:")
+    UI.message("   0_APP_DESKTOP_0.png")
+    UI.message("   1_APP_DESKTOP_0.png")
+    UI.message("   2_APP_DESKTOP_0.png")
+    UI.message("   ...")
+    UI.message("")
+    UI.message("5. Upload to App Store Connect:")
+    UI.message("   fastlane mac screenshots_upload")
+    UI.message("")
+
+    # Check for existing macOS screenshots
+    existing = Dir.glob("#{target_dir}/*APP_DESKTOP*.png")
+    if existing.any?
+      UI.success("Found #{existing.count} existing macOS screenshots:")
+      existing.sort.each do |f|
+        dimensions = `sips -g pixelWidth -g pixelHeight "#{f}" 2>/dev/null | grep pixel | awk '{print $2}' | tr '\n' 'x'`.chomp.sub(/x$/, '')
+        UI.message("  📷 #{File.basename(f)} (#{dimensions})")
+      end
+    else
+      UI.important("No macOS screenshots found yet in #{target_dir}/")
+    end
+  end
+
+  desc "Upload macOS screenshots to App Store Connect"
+  lane :screenshots_upload do
+    if ENV["APP_STORE_CONNECT_API_KEY_ID"]
+      key_path = ENV["APP_STORE_CONNECT_API_KEY_PATH"] ||
+                 "fastlane/AuthKey_#{ENV['APP_STORE_CONNECT_API_KEY_ID']}.p8"
+      app_store_connect_api_key(
+        key_id: ENV["APP_STORE_CONNECT_API_KEY_ID"],
+        issuer_id: ENV["APP_STORE_CONNECT_API_ISSUER_ID"],
+        key_filepath: key_path,
+        duration: 1200,
+        in_house: false
+      )
+    end
+
+    # List macOS screenshots being uploaded
+    # macOS uses separate screenshots folder to avoid conflicts with iOS screenshots
+    screenshot_dir = "screenshots_mac/en-US"
+    mac_screenshots = Dir.glob("#{screenshot_dir}/*APP_DESKTOP*.png")
+    UI.message("Found #{mac_screenshots.count} macOS screenshots to upload:")
+    mac_screenshots.sort.each { |f| UI.message("  📷 #{File.basename(f)}") }
+
+    deliver(
+      app_identifier: ENV["APP_IDENTIFIER"] || "com.obsessioncommunity.tracker",
+      platform: "osx",
+      screenshots_path: "./fastlane/screenshots_mac",
+      skip_binary_upload: true,
+      skip_metadata: true,
+      overwrite_screenshots: true,
+      precheck_include_in_app_purchases: false,
+      force: true,
+      team_id: "128579436",
+      dev_portal_team_id: "686BSNR73Z"
+    )
+
+    UI.success("✅ macOS screenshots uploaded to App Store Connect!")
+  end
+
+  desc "Generate AND upload macOS screenshots to App Store Connect"
+  lane :screenshots_full do
+    screenshots_generate
+    screenshots_upload
+  end
+
+  desc "Submit existing TestFlight build to Mac App Store for review (no rebuild)"
+  lane :submit_for_review do |options|
+    # This lane submits an EXISTING TestFlight build to the Mac App Store for review.
+    # Use this when you already have a build in TestFlight that you want to release.
+    #
+    # Usage:
+    #   fastlane mac submit_for_review                    # Uses latest build
+    #   fastlane mac submit_for_review build_number:123   # Uses specific build
+    #   fastlane mac submit_for_review version:1.0.0      # For specific version
+
+    if ENV["APP_STORE_CONNECT_API_KEY_ID"]
+      key_path = ENV["APP_STORE_CONNECT_API_KEY_PATH"] ||
+                 "fastlane/AuthKey_#{ENV['APP_STORE_CONNECT_API_KEY_ID']}.p8"
+      app_store_connect_api_key(
+        key_id: ENV["APP_STORE_CONNECT_API_KEY_ID"],
+        issuer_id: ENV["APP_STORE_CONNECT_API_ISSUER_ID"],
+        key_filepath: key_path,
+        duration: 1200,
+        in_house: false
+      )
+    end
+
+    deliver_options = {
+      app_identifier: ENV["APP_IDENTIFIER"] || "com.obsessioncommunity.tracker",
+      platform: "osx",
+      submit_for_review: true,
+      automatic_release: options[:automatic_release] != false,
+      force: true,
+      skip_binary_upload: true,
+      skip_screenshots: true,
+      skip_metadata: false,
+      precheck_include_in_app_purchases: false,
+      team_id: "128579436",
+      dev_portal_team_id: "686BSNR73Z",
+      submission_information: {
+        add_id_info_serves_ads: false,
+        add_id_info_tracks_action: false,
+        add_id_info_tracks_install: false,
+        add_id_info_uses_idfa: false,
+        content_rights_has_rights: true,
+        content_rights_contains_third_party_content: true,
+        export_compliance_uses_encryption: true,
+        export_compliance_is_exempt: true,
+        export_compliance_contains_proprietary_cryptography: false,
+        export_compliance_contains_third_party_cryptography: false
+      }
+    }
+
+    if options[:build_number]
+      deliver_options[:build_number] = options[:build_number].to_s
+      UI.message("Submitting macOS build #{options[:build_number]} for review...")
+    else
+      UI.message("Submitting latest macOS TestFlight build for review...")
+    end
+
+    if options[:version]
+      deliver_options[:app_version] = options[:version]
+    end
+
+    deliver(deliver_options)
+
+    UI.success("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    UI.success("✅ macOS app submitted for review!")
+    UI.success("")
+    UI.success("Next steps:")
+    UI.success("  1. Check App Store Connect for review status")
+    UI.success("  2. Respond to any reviewer questions")
+    UI.success("  3. Once approved, your app will be released automatically")
+    UI.success("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+  end
+
+  # Error handling
+  error do |lane, exception|
+    UI.error("Error in lane #{lane}: #{exception.message}")
+  end
+end
+
+platform :android do
+  desc "Push a new beta build to Google Play internal testing"
+  lane :beta do |options|
+    # Build number MUST be provided to keep iOS/Android in sync
+    build_number = options[:build_number]
+    UI.user_error!("build_number is required. Use: fastlane android beta build_number:XX") unless build_number
+
+    # Build with Flutter (ensures consistent build across platforms)
+    sh("flutter", "pub", "get")
+    sh("flutter", "clean") unless ENV["SKIP_FLUTTER_CLEAN"]
+    sh("flutter", "build", "appbundle",
+       "--release",
+       "--build-number=#{build_number}")
+
+    # Upload to Google Play internal track
+    upload_to_play_store(
+      track: "internal",
+      aab: "build/app/outputs/bundle/release/app-release.aab",
+      skip_upload_metadata: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true,
+      skip_upload_changelogs: true,
+      json_key: ENV["SUPPLY_JSON_KEY"] || "fastlane/google-play-key.json"
+    )
+  end
+
+  desc "Upload metadata (text only) to Google Play - NO images or screenshots"
+  lane :metadata do
+    begin
+      upload_to_play_store(
+        skip_upload_apk: true,
+        skip_upload_aab: true,
+        skip_upload_images: true,        # Use screenshots_upload lane for images
+        skip_upload_screenshots: true,   # Use screenshots_upload lane for screenshots
+        skip_upload_changelogs: true,    # Changelogs require version_code (uploaded with builds)
+        json_key: ENV["SUPPLY_JSON_KEY"] || "fastlane/google-play-key.json"
+      )
+    rescue => ex
+      if ex.message.include?("No data") || ex.message.include?("size") || ex.message.include?("nil:NilClass")
+        UI.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        UI.error("No app found in Google Play Console")
+        UI.error("")
+        UI.error("This means you need to create the app listing first:")
+        UI.error("  1. Go to https://play.google.com/console")
+        UI.error("  2. Create your app (Obsession Tracker)")
+        UI.error("  3. Create at least one release (internal/alpha/beta)")
+        UI.error("  4. Then run: bundle exec fastlane android metadata")
+        UI.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+      else
+        raise ex
+      end
+    end
+  end
+
+  # ============================================================
+  # Android Screenshot Configuration
+  # ============================================================
+  # Google Play screenshot requirements:
+  # - Phone: Min 320px, Max 3840px per side. Recommended 1080x1920 (portrait)
+  # - 7-inch tablet: Same requirements. Recommended 1200x1920
+  # - 10-inch tablet: Same requirements. Recommended 1600x2560 or 2048x2732
+  #
+  # Folder structure: metadata/android/en-US/images/{deviceType}Screenshots/
+  # Naming: 1.png, 2.png, etc. (1-indexed, up to 8 screenshots)
+
+  # Device configurations for Google Play screenshots
+  # Format: { name: display_name, avd: Android Virtual Device name, device_type: folder suffix, target_size: [width, height] }
+  # Google Play requires: phoneScreenshots, sevenInchScreenshots, tenInchScreenshots
+  ANDROID_SCREENSHOT_DEVICES = {
+    phone: {
+      name: "Pixel 9 Pro",
+      avd: "Pixel_9_Pro",
+      device_type: "phone",       # -> phoneScreenshots/
+      target_size: [1080, 2400]   # Google Play recommended phone size
+    },
+    sevenInch: {
+      name: "Nexus 7",
+      avd: "Nexus_7",
+      device_type: "sevenInch",   # -> sevenInchScreenshots/
+      target_size: [1200, 1920]   # Google Play 7-inch tablet size
+    },
+    tenInch: {
+      name: "Medium Tablet",
+      avd: "Medium_Tablet",
+      device_type: "tenInch",     # -> tenInchScreenshots/
+      target_size: [1600, 2560]   # Google Play 10-inch tablet size
+    }
+  }
+
+  desc "Download metadata and screenshots from Google Play"
+  lane :screenshots_download do
+    supply(
+      json_key: ENV["SUPPLY_JSON_KEY"] || "fastlane/google-play-key.json",
+      package_name: "com.obsessiontracker.app",
+      metadata_path: "fastlane/metadata/android"
+    )
+    UI.success("✅ Downloaded metadata to fastlane/metadata/android/")
+    UI.message("Check en-US/images/ for screenshot folder structure")
+  end
+
+  desc "Generate screenshots for Google Play. Usage: screenshots_generate [phone|sevenInch|tenInch] (no arg = all)"
+  lane :screenshots_generate do |options|
+    # Check for device type - support multiple syntaxes:
+    # - device_type:tenInch (explicit key-value)
+    # - tenInch:true (boolean flag)
+    # - tenInch (bare positional arg via ARGV)
+    valid_devices = %w[phone sevenInch tenInch]
+    device_arg = options[:device_type]&.to_s ||
+                 options[:device]&.to_s ||
+                 options.keys.map(&:to_s).find { |k| valid_devices.include?(k) } ||
+                 ARGV.find { |arg| valid_devices.include?(arg) }
+
+    if device_arg
+      # Single device specified
+      unless valid_devices.include?(device_arg)
+        UI.user_error!("Invalid device type '#{device_arg}'. Use: phone, sevenInch, or tenInch")
+      end
+      generate_device_screenshots(device_type: device_arg.to_sym)
+      UI.success("✅ #{device_arg} screenshots generated!")
+    else
+      # No device specified - generate all
+      UI.header("Generating ALL screenshots (phone + 7-inch + 10-inch)")
+
+      # Generate phone screenshots
+      generate_device_screenshots(device_type: :phone)
+
+      # Generate 7-inch tablet screenshots
+      generate_device_screenshots(device_type: :sevenInch)
+
+      # Generate 10-inch tablet screenshots
+      generate_device_screenshots(device_type: :tenInch)
+
+      UI.success("✅ All Android screenshots generated!")
+    end
+
+    UI.message("📁 Screenshots saved to: fastlane/metadata/android/en-US/images/")
+    UI.message("")
+    UI.message("To upload screenshots to Google Play, run:")
+    UI.message("  fastlane android screenshots_upload")
+  end
+
+  desc "Internal: Generate screenshots for a specific device type. Use screenshots_generate instead."
+  lane :generate_device_screenshots do |options|
+    unless options[:device_type]
+      UI.user_error!("device_type is required. Use: screenshots_generate [phone|sevenInch|tenInch]")
+    end
+
+    device_type = options[:device_type].to_sym
+    device_config = ANDROID_SCREENSHOT_DEVICES[device_type]
+    package_name = "com.obsessiontracker.app"
+
+    UI.header("Generating #{device_config[:name]} screenshots")
+
+    # Clean up any orphaned emulators from previous runs (Ctrl+C or crashes)
+    # This is critical to prevent memory leaks when running multiple devices
+    UI.message("🧹 Cleaning up any orphaned emulators...")
+
+    # First, try graceful ADB shutdown
+    system("adb emu kill 2>/dev/null")
+    sleep(1)
+
+    # Force kill ALL emulator and qemu processes to ensure clean slate
+    UI.message("   Killing any lingering emulator processes...")
+    system("pkill -9 -f 'qemu-system' 2>/dev/null")
+    system("pkill -9 -f 'emulator64' 2>/dev/null")
+    system("pkill -9 -f 'emulator-' 2>/dev/null")
+    system("pkill -9 -f 'Android Emulator' 2>/dev/null")
+    sleep(3)
+
+    # Restart ADB server fresh
+    system("adb kill-server 2>/dev/null")
+    sleep(2)
+    system("adb start-server")
+    sleep(2)
+
+    # Verify no emulators are running
+    running_emus = `adb devices 2>/dev/null | grep emulator | wc -l`.strip.to_i
+    if running_emus > 0
+      UI.important("⚠️ Found #{running_emus} emulator(s) still connected, attempting cleanup...")
+      system("adb emu kill 2>/dev/null")
+      sleep(3)
+    end
+
+    avd_name = device_config[:avd]
+    device_type_folder = device_config[:device_type]
+    target_size = device_config[:target_size]
+
+    # Target directory for screenshots
+    target_dir = "fastlane/metadata/android/en-US/images/#{device_type_folder}Screenshots"
+
+    # Ensure we're in the Flutter project root
+    Dir.chdir("..") do
+      sh("flutter", "pub", "get")
+
+      # Check if AVD exists, provide instructions if not
+      avd_list = `$ANDROID_HOME/emulator/emulator -list-avds 2>/dev/null || emulator -list-avds 2>/dev/null`.strip.split("\n")
+      unless avd_list.include?(avd_name)
+        UI.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        UI.error("AVD '#{avd_name}' not found!")
+        UI.error("")
+        UI.error("Available AVDs: #{avd_list.join(', ')}")
+        UI.error("")
+        UI.error("To create #{device_config[:name]} AVD:")
+        UI.error("  1. Open Android Studio")
+        UI.error("  2. Tools > Device Manager > Create Device")
+        UI.error("  3. Select '#{device_config[:name]}' or similar")
+        UI.error("  4. Download API 35 system image")
+        UI.error("  5. Name it '#{avd_name}'")
+        UI.error("")
+        UI.error("Or use an existing AVD:")
+        UI.error("  fastlane android generate_device_screenshots device_type:phone avd:YourAVDName")
+        UI.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        UI.user_error!("Please create the AVD and try again")
+      end
+
+      # Start emulator in background with explicit memory settings
+      UI.message("🚀 Starting emulator #{avd_name}...")
+      # Use -no-snapshot to prevent memory-heavy snapshot operations
+      # Use -gpu swiftshader_indirect for more reliable GPU memory cleanup
+      emulator_cmd = "#{ENV['ANDROID_HOME']}/emulator/emulator -avd #{avd_name} -no-snapshot -gpu swiftshader_indirect -memory 2048"
+      emulator_pid = spawn(emulator_cmd, [:out, :err] => "/dev/null")
+      Process.detach(emulator_pid)
+      UI.message("📝 Emulator PID: #{emulator_pid}")
+
+      # Wait for emulator to boot
+      # Define emulator serial for targeting commands (handles multiple devices)
+      emulator_serial = "emulator-5554"
+      UI.message("⏳ Waiting for emulator to boot (serial: #{emulator_serial})...")
+      boot_timeout = 120
+      boot_start = Time.now
+      loop do
+        boot_status = `adb -s #{emulator_serial} shell getprop sys.boot_completed 2>/dev/null`.strip
+        break if boot_status == "1"
+
+        if Time.now - boot_start > boot_timeout
+          UI.user_error!("Emulator failed to boot within #{boot_timeout} seconds")
+        end
+        sleep(2)
+      end
+      UI.message("✅ Emulator booted!")
+
+      # Wait for device to be fully ready
+      sleep(5)
+
+      # Enable dark mode
+      UI.message("🌙 Enabling dark mode...")
+      sh("adb", "-s", emulator_serial, "shell", "cmd", "uimode", "night", "yes")
+
+      # Set GPS location to Grand Staircase-Escalante, Utah (where demo data is located)
+      UI.message("📍 Setting GPS location to Grand Staircase-Escalante, UT (37.72, -111.42)...")
+      sh("adb", "-s", emulator_serial, "emu", "geo", "fix", "-111.42", "37.72") rescue UI.message("GPS location set (may have warning)")
+
+      # Uninstall existing app
+      UI.message("🗑️ Uninstalling existing app...")
+      sh("adb", "-s", emulator_serial, "uninstall", package_name) rescue UI.message("App wasn't installed")
+      sh("adb", "-s", emulator_serial, "uninstall", "#{package_name}.debug") rescue UI.message("Debug app wasn't installed")
+
+      # Build debug APK
+      UI.message("🔨 Building debug APK...")
+      sh("flutter", "build", "apk", "--debug")
+
+      # Install APK manually first
+      UI.message("📲 Installing APK...")
+      sh("adb", "-s", emulator_serial, "install", "-r", "build/app/outputs/flutter-apk/app-debug.apk")
+
+      # Grant location permissions (required for GPS features)
+      UI.message("🔐 Granting location permissions...")
+      sh("adb", "-s", emulator_serial, "shell", "pm", "grant", "#{package_name}.debug", "android.permission.ACCESS_FINE_LOCATION")
+      sh("adb", "-s", emulator_serial, "shell", "pm", "grant", "#{package_name}.debug", "android.permission.ACCESS_COARSE_LOCATION")
+      system("adb -s #{emulator_serial} shell pm grant #{package_name}.debug android.permission.ACCESS_BACKGROUND_LOCATION 2>/dev/null")
+
+      # Grant camera permission for photo features
+      sh("adb", "-s", emulator_serial, "shell", "pm", "grant", "#{package_name}.debug", "android.permission.CAMERA")
+
+      # Push fixture files to /sdcard/ (publicly writable location)
+      # The test code will look for fixtures in /sdcard/obsession-fixtures/
+
+      # UT fixtures for land data screenshots
+      ut_fixtures_source = "integration_test/fixtures/states/UT"
+      if Dir.exist?(ut_fixtures_source) && !Dir.empty?(ut_fixtures_source)
+        UI.message("📦 Pushing UT fixture files to device...")
+        ut_fixtures_dest = "/sdcard/obsession-fixtures/states/UT"
+        sh("adb", "-s", emulator_serial, "shell", "mkdir", "-p", ut_fixtures_dest)
+        Dir.glob("#{ut_fixtures_source}/*.zip").each do |zip_file|
+          sh("adb", "-s", emulator_serial, "push", zip_file, ut_fixtures_dest + "/")
+          UI.message("  📄 Pushed #{File.basename(zip_file)}")
+        end
+        UI.success("✅ UT fixtures pushed to device")
+      end
+
+      # WY fixtures for historical map screenshot
+      # Push to /data/local/tmp which is publicly accessible on emulators
+      wy_fixtures_source = "integration_test/fixtures/states/WY/historical_maps"
+      if Dir.exist?(wy_fixtures_source) && !Dir.empty?(wy_fixtures_source)
+        UI.message("📦 Pushing WY historical map fixtures to device...")
+        wy_fixtures_dest = "/data/local/tmp/historical_maps/WY/early_topo"
+
+        sh("adb", "-s", emulator_serial, "shell", "mkdir", "-p", wy_fixtures_dest)
+        Dir.glob("#{wy_fixtures_source}/*.mbtiles").each do |mbtiles_file|
+          filename = File.basename(mbtiles_file)
+          sh("adb", "-s", emulator_serial, "push", mbtiles_file, "#{wy_fixtures_dest}/#{filename}")
+          UI.message("  📄 Pushed #{filename}")
+        end
+        UI.success("✅ WY historical map fixtures pushed to device")
+      else
+        UI.important("⚠️ No WY historical map fixtures found - historical map screenshot will not have overlay")
+      end
+
+      # Create target directory
+      sh("mkdir", "-p", target_dir)
+
+      # Run flutter drive with Android-specific environment variables
+      UI.message("📱 Running screenshot test...")
+      ENV["SCREENSHOT_PLATFORM"] = "android"
+      ENV["SCREENSHOT_DEVICE_TYPE"] = device_type_folder
+
+      begin
+        sh(
+          "flutter", "drive",
+          "--driver=test_driver/integration_test.dart",
+          "--target=integration_test/screenshots_test.dart",
+          "-d", "emulator-5554",
+          "--no-build"  # Skip rebuild since we already installed
+        )
+      rescue => ex
+        UI.error("Screenshot test failed: #{ex.message}")
+        UI.message("Attempting to kill emulator and clean up...")
+
+        # Forcefully kill emulator using PID
+        system("adb emu kill 2>/dev/null")
+        sleep(1)
+        begin
+          Process.kill("KILL", emulator_pid) if system("ps -p #{emulator_pid} > /dev/null 2>&1")
+        rescue => kill_error
+          UI.message("   Kill error (expected if already dead): #{kill_error.message}")
+        end
+
+        # Kill any orphaned processes
+        system("pkill -9 -f 'qemu.*#{avd_name}' 2>/dev/null")
+        system("pkill -9 -f 'emulator.*#{avd_name}' 2>/dev/null")
+        sleep(2)
+
+        system("adb kill-server 2>/dev/null")
+        sleep(2)
+        system("adb start-server")
+        raise ex
+      end
+
+      UI.success("✅ #{device_config[:name]} screenshots captured!")
+
+      # Resize screenshots if needed
+      if target_size
+        UI.message("📐 Resizing screenshots to #{target_size[0]}x#{target_size[1]}...")
+        Dir.glob("#{target_dir}/*.png").sort.each do |f|
+          sh("sips", "-z", target_size[1].to_s, target_size[0].to_s, f, out: File::NULL, err: File::NULL)
+          UI.message("  📐 Resized: #{File.basename(f)}")
+        end
+      end
+
+      # Kill emulator forcefully using stored PID
+      UI.message("🛑 Stopping emulator (PID: #{emulator_pid})...")
+
+      # First try graceful shutdown via ADB
+      system("adb emu kill 2>/dev/null")
+      sleep(2)
+
+      # Then forcefully kill the emulator process if still running
+      begin
+        if system("ps -p #{emulator_pid} > /dev/null 2>&1")
+          UI.message("   Emulator still running, sending SIGTERM...")
+          Process.kill("TERM", emulator_pid)
+          sleep(3)
+        end
+
+        # If still running, force kill
+        if system("ps -p #{emulator_pid} > /dev/null 2>&1")
+          UI.message("   Emulator still running, sending SIGKILL...")
+          Process.kill("KILL", emulator_pid)
+          sleep(2)
+        end
+      rescue Errno::ESRCH
+        UI.message("   Emulator process already terminated")
+      rescue => e
+        UI.message("   Error killing emulator: #{e.message}")
+      end
+
+      # Kill any orphaned emulator/qemu processes for this AVD
+      UI.message("🧹 Cleaning up any orphaned emulator processes...")
+      system("pkill -9 -f 'qemu.*#{avd_name}' 2>/dev/null")
+      system("pkill -9 -f 'emulator.*#{avd_name}' 2>/dev/null")
+      sleep(2)
+
+      # Restart ADB server to release any held resources
+      UI.message("🔄 Restarting ADB server...")
+      system("adb kill-server 2>/dev/null")
+      sleep(2)
+      system("adb start-server")
+      sleep(2)
+
+      # Clear emulator temp files to free memory
+      UI.message("🗑️ Clearing emulator temp files...")
+      avd_path = File.expand_path("~/.android/avd/#{avd_name}.avd")
+      if File.directory?(avd_path)
+        # Remove hardware-qemu.ini.lock if exists
+        lock_file = "#{avd_path}/hardware-qemu.ini.lock"
+        File.delete(lock_file) if File.exist?(lock_file)
+        # Remove multiinstance.lock if exists
+        multiinstance_lock = "#{avd_path}/multiinstance.lock"
+        File.delete(multiinstance_lock) if File.exist?(multiinstance_lock)
+      end
+
+      UI.success("✅ Emulator cleanup complete")
+
+      # List screenshots with dimensions
+      UI.success("✅ #{device_config[:name]} screenshots complete!")
+      Dir.glob("#{target_dir}/*.png").sort.each do |f|
+        dimensions = `sips -g pixelWidth -g pixelHeight "#{f}" 2>/dev/null | grep pixel | awk '{print $2}' | tr '\n' 'x'`.chomp.sub(/x$/, '')
+        UI.message("  📷 #{File.basename(f)} (#{dimensions})")
+      end
+    end
+  end
+
+  desc "Upload screenshots, icon, and feature graphic to Google Play"
+  lane :screenshots_upload do
+    images_dir = "metadata/android/en-US/images"
+    phone_dir = "#{images_dir}/phoneScreenshots"
+    seven_inch_dir = "#{images_dir}/sevenInchScreenshots"
+    ten_inch_dir = "#{images_dir}/tenInchScreenshots"
+
+    # Check for store presence images
+    icon_path = "#{images_dir}/icon.png"
+    feature_path = "#{images_dir}/featureGraphic.png"
+
+    if File.exist?(icon_path)
+      UI.message("📦 Icon: #{icon_path}")
+    else
+      UI.important("⚠️ No icon.png found - copy from store_assets/android/app_icon/ic_launcher_512.png")
+    end
+
+    if File.exist?(feature_path)
+      UI.message("📦 Feature graphic: #{feature_path}")
+    else
+      UI.important("⚠️ No featureGraphic.png found - copy from store_assets/android/feature_graphic.png")
+    end
+
+    # List screenshots
+    phone_screenshots = Dir.glob("#{phone_dir}/*.png")
+    seven_inch_screenshots = Dir.glob("#{seven_inch_dir}/*.png")
+    ten_inch_screenshots = Dir.glob("#{ten_inch_dir}/*.png")
+
+    UI.message("Found #{phone_screenshots.count} phone screenshots")
+    UI.message("Found #{seven_inch_screenshots.count} 7-inch tablet screenshots")
+    UI.message("Found #{ten_inch_screenshots.count} 10-inch tablet screenshots")
+
+    upload_to_play_store(
+      track: "internal",
+      skip_upload_apk: true,
+      skip_upload_aab: true,
+      skip_upload_metadata: true,
+      skip_upload_images: false,       # Upload icon + feature graphic
+      skip_upload_screenshots: false,  # Upload screenshots
+      skip_upload_changelogs: true,
+      json_key: ENV["SUPPLY_JSON_KEY"] || "fastlane/google-play-key.json"
+    )
+
+    UI.success("✅ Screenshots and images uploaded to Google Play!")
+  end
+
+  desc "Generate AND upload screenshots to Google Play"
+  lane :screenshots_full do
+    screenshots_generate
+    screenshots_upload
+  end
+
+  desc "Deploy a new version to the Google Play Store (builds and uploads binary + changelog only)"
+  lane :release do |options|
+    # Build number MUST be provided to keep iOS/Android in sync
+    build_number = options[:build_number]
+    UI.user_error!("build_number is required. Use: fastlane android release build_number:XX") unless build_number
+
+    # Build with Flutter
+    sh("flutter", "pub", "get")
+    sh("flutter", "clean") unless ENV["SKIP_FLUTTER_CLEAN"]
+    sh("flutter", "build", "appbundle",
+       "--release",
+       "--build-number=#{build_number}")
+
+    # Upload to Google Play production track
+    # IMPORTANT: Only upload binary + changelog to avoid triggering content review
+    # Metadata/screenshot changes trigger a longer review process
+    # Use 'release_full' lane when you actually want to update store listing
+    upload_to_play_store(
+      track: "production",
+      aab: "build/app/outputs/bundle/release/app-release.aab",
+      skip_upload_metadata: true,       # Skip to avoid content review
+      skip_upload_images: true,         # Skip to avoid content review
+      skip_upload_screenshots: true,    # Skip to avoid content review
+      skip_upload_changelogs: false,    # Keep changelog for release notes
+      json_key: ENV["SUPPLY_JSON_KEY"] || "fastlane/google-play-key.json"
+    )
+
+    UI.success("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    UI.success("✅ Build uploaded to production!")
+    UI.success("")
+    UI.success("Only binary + changelog uploaded (faster review)")
+    UI.success("To update store listing, run: fastlane android metadata")
+    UI.success("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+  end
+
+  desc "Deploy with ALL metadata (use sparingly - triggers longer content review)"
+  lane :release_full do |options|
+    # Build number MUST be provided to keep iOS/Android in sync
+    build_number = options[:build_number]
+    UI.user_error!("build_number is required. Use: fastlane android release_full build_number:XX") unless build_number
+
+    UI.important("⚠️ This uploads ALL metadata which triggers longer content review")
+    UI.important("   Use 'fastlane android release' for faster binary-only releases")
+
+    # Build with Flutter
+    sh("flutter", "pub", "get")
+    sh("flutter", "clean") unless ENV["SKIP_FLUTTER_CLEAN"]
+    sh("flutter", "build", "appbundle",
+       "--release",
+       "--build-number=#{build_number}")
+
+    # Upload to Google Play production track WITH all metadata
+    upload_to_play_store(
+      track: "production",
+      aab: "build/app/outputs/bundle/release/app-release.aab",
+      skip_upload_metadata: false,
+      skip_upload_images: false,
+      skip_upload_screenshots: false,
+      skip_upload_changelogs: false,
+      json_key: ENV["SUPPLY_JSON_KEY"] || "fastlane/google-play-key.json"
+    )
+  end
+
+  desc "Promote existing internal/beta build to production (no rebuild)"
+  lane :promote do |options|
+    # This lane promotes an EXISTING internal/beta build to production.
+    # Use this when you already have a build in internal testing that you want to release.
+    #
+    # Usage:
+    #   fastlane android promote                           # Promotes from internal to production
+    #   fastlane android promote from:beta                 # Promotes from beta to production
+    #   fastlane android promote version_code:123          # Promotes specific version
+    #
+    # NOTE: Changelogs are uploaded with the promotion. Ensure:
+    #   - Changelog is ≤500 characters (Google Play limit)
+    #   - File exists: fastlane/metadata/android/en-US/changelogs/{version_code}.txt
+
+    from_track = options[:from] || "internal"
+    to_track = options[:to] || "production"
+    rollout = options[:rollout] || 1.0  # 1.0 = 100% rollout
+
+    UI.header("Promoting from #{from_track} to #{to_track}")
+
+    # Get version code - either from options or auto-detect from source track
+    version_code = options[:version_code]
+    unless version_code
+      version_codes = google_play_track_version_codes(
+        track: from_track,
+        json_key: ENV["SUPPLY_JSON_KEY"] || "fastlane/google-play-key.json"
+      )
+      if version_codes.empty?
+        UI.user_error!("No releases found in #{from_track} track")
+      end
+      version_code = version_codes.first
+      UI.message("Auto-detected version code: #{version_code}")
+    end
+
+    # Check if changelog exists for this version
+    changelog_path = "fastlane/metadata/android/en-US/changelogs/#{version_code}.txt"
+    default_changelog = "fastlane/metadata/android/en-US/changelogs/default.txt"
+
+    unless File.exist?(changelog_path)
+      if File.exist?(default_changelog)
+        UI.message("Creating changelog for version #{version_code} from default.txt")
+        FileUtils.cp(default_changelog, changelog_path)
+      else
+        UI.important("No changelog found for version #{version_code}")
+      end
+    end
+
+    promote_options = {
+      track: from_track,                      # Source track (where the build currently is)
+      track_promote_to: to_track,             # Destination track (where to promote it)
+      track_promote_release_status: "completed",
+      skip_upload_apk: true,
+      skip_upload_aab: true,
+      skip_upload_metadata: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true,
+      skip_upload_changelogs: false,          # Upload release notes when promoting to production
+      version_code: version_code.to_i,
+      json_key: ENV["SUPPLY_JSON_KEY"] || "fastlane/google-play-key.json"
+    }
+
+    # If rollout percentage specified (for staged rollout)
+    if rollout < 1.0
+      promote_options[:rollout] = rollout.to_s
+      UI.message("Using staged rollout: #{(rollout * 100).to_i}%")
+    end
+
+    # Promote the build
+    upload_to_play_store(promote_options)
+
+    UI.success("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    UI.success("✅ Build promoted to #{to_track}!")
+    UI.success("")
+    if rollout < 1.0
+      UI.success("Staged rollout: #{(rollout * 100).to_i}% of users")
+      UI.success("To increase rollout: fastlane android promote rollout:0.5")
+      UI.success("To complete rollout: fastlane android promote rollout:1.0")
+    else
+      UI.success("100% rollout - app is now live on Google Play!")
+    end
+    UI.success("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+  end
+end

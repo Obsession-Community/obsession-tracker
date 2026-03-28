@@ -1,0 +1,55 @@
+# Configuration for automated screenshot generation
+# Run with: screenshots
+
+# Tests to run for screenshot generation
+tests:
+  - integration_test/screenshots_test.dart
+
+# Staging area for screenshots (before uploading to stores)
+staging: /tmp/screenshots
+
+# Locales to generate screenshots for
+locales:
+  - en-US
+
+# iOS devices to generate screenshots for (all required App Store sizes)
+devices:
+  ios:
+    iPhone 15 Pro Max:
+      frame: false  # Don't add device frames for cleaner screenshots
+      orientation: portrait
+    iPhone 15 Pro:
+      frame: false
+      orientation: portrait
+    iPhone 8 Plus:
+      frame: false
+      orientation: portrait
+    iPad Pro (12.9-inch) (6th generation):
+      frame: false
+      orientation: portrait
+    iPad Pro (12.9-inch) (6th generation):
+      frame: false
+      orientation: landscapeRight
+
+  # Android devices for Google Play screenshots
+  android:
+    # Phone screenshots
+    - Pixel 6:
+        frame: false
+        orientation: portrait
+    # Tablet screenshots
+    - Nexus 9:
+        frame: false
+        orientation: landscapeRight
+
+# Screenshots will be copied to fastlane directories for upload
+# iOS: fastlane/screenshots/en-US/
+# Android: fastlane/metadata/android/en-US/images/phoneScreenshots/
+
+# Frame screenshots with device frames (optional, disabled by default)
+frame: false
+
+# Recording options
+recording:
+  # Simulator stays alive after test (useful for debugging)
+  stop: false

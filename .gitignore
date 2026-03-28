@@ -1,0 +1,261 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.build/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+migrate_working_dir/
+
+# Claude Code local settings
+.claude/settings.local.json
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# The .vscode folder contains launch configuration and tasks you configure in
+# VS Code which you may wish to be included in version control, so this line
+# is commented out by default.
+#.vscode/
+
+# Flutter/Dart/Pub related
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+/build/
+
+# Symbolication related
+app.*.symbols
+
+# Obfuscation related
+app.*.map.json
+
+# Android related
+**/android/**/gradle-wrapper.jar
+**/android/.gradle
+**/android/.kotlin/
+**/android/captures/
+**/android/gradlew
+**/android/gradlew.bat
+**/android/local.properties
+**/android/**/GeneratedPluginRegistrant.java
+
+# iOS/XCode related
+**/ios/**/*.mode1v3
+**/ios/**/*.mode2v3
+**/ios/**/*.moved-aside
+**/ios/**/*.pbxuser
+**/ios/**/*.perspectivev3
+**/ios/**/*sync/
+**/ios/**/.sconsign.dblite
+**/ios/**/.tags*
+**/ios/**/.vagrant/
+**/ios/**/DerivedData/
+**/ios/**/Icon?
+**/ios/**/Pods/
+**/ios/**/.symlinks/
+**/ios/**/profile
+**/ios/**/xcuserdata
+**/ios/.generated/
+**/ios/Flutter/.last_build_id
+**/ios/Flutter/App.framework
+**/ios/Flutter/Flutter.framework
+**/ios/Flutter/Flutter.podspec
+**/ios/Flutter/Generated.xcconfig
+**/ios/Flutter/ephemeral/
+**/ios/Flutter/app.flx
+**/ios/Flutter/app.zip
+**/ios/Flutter/flutter_assets/
+**/ios/Flutter/flutter_export_environment.sh
+**/ios/ServiceDefinitions.json
+**/ios/Runner/GeneratedPluginRegistrant.*
+
+# macOS related
+**/macos/Flutter/GeneratedPluginRegistrant.swift
+
+# Windows related
+**/windows/flutter/generated_plugin_registrant.cc
+**/windows/flutter/generated_plugin_registrant.h
+**/windows/flutter/generated_plugins.cmake
+
+# Linux related
+**/linux/flutter/generated_plugin_registrant.cc
+**/linux/flutter/generated_plugin_registrant.h
+**/linux/flutter/generated_plugins.cmake
+
+# Coverage
+coverage/
+
+# Exceptions to above rules.
+!**/ios/**/default.mode1v3
+!**/ios/**/default.mode2v3
+!**/ios/**/default.pbxuser
+!**/ios/**/default.perspectivev3
+
+# App-specific ignores
+
+# Local SQLite databases (development/test only)
+*.db
+*.sqlite
+*.sqlite3
+
+# User data and photos (privacy protection)
+user_data/
+photos/
+exports/
+backups/
+
+# API keys and sensitive configuration
+secrets.dart
+api_keys.json
+lib/firebase_options.dart
+.env*
+!.env.example
+!.env.default
+!fastlane/.env.default
+
+# Certificates and signing (root-level catch-all)
+*.pem
+*.key
+*.p12
+*.p8
+*.cer
+*.mobileprovision
+*.certSigningRequest
+
+# Build artifacts (root-level catch-all)
+*.ipa
+*.apk
+*.aab
+*.dSYM
+*.dSYM.zip
+
+# App backup files
+*.obk
+
+# Ruby (for Fastlane)
+vendor/
+.bundle/
+
+# Android NDK
+.cxx/
+
+# Tooling
+.incredibuilders/
+
+# Local git config
+.gitconfig
+
+# Map tiles cache (can be regenerated)
+map_cache/
+tiles/
+
+# Test coverage reports
+test_coverage/
+
+# Generated files
+*.g.dart
+*.freezed.dart
+*.mocks.dart
+
+# Build outputs
+build/
+dist/
+release/
+
+# Platform-specific build outputs
+android/app/release/
+ios/build/
+macos/build/
+windows/build/
+linux/build/
+
+# Crashlytics (if used in future)
+**/ios/crashlytics-build.properties
+**/android/crashlytics-build.properties
+
+# Firebase (if used in future)
+**/ios/firebase_app_id_file.json
+**/android/app/google-services.json
+**/ios/Runner/GoogleService-Info.plist
+
+# Fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/metadata/**/images/*Screenshots/*.png
+fastlane/test_output
+fastlane/api_key.json
+**/ios/fastlane/report.xml
+**/ios/fastlane/Preview.html
+**/ios/fastlane/screenshots
+**/ios/fastlane/test_output
+**/android/fastlane/report.xml
+**/android/fastlane/Preview.html
+**/android/fastlane/screenshots
+**/android/fastlane/test_output
+
+# FVM (Flutter Version Management)
+.fvm/
+
+# Dart analysis server cache
+.dartServer
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+
+# Log files
+logs/
+*.log
+
+# Editor configurations (personal preferences)
+.vscode/settings.json
+.vscode/launch.json
+.vscode/tasks.json
+
+# OS generated files
+Thumbs.db
+ehthumbs.db
+Icon?
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+
+# Archive files
+*.zip
+*.tar.gz
+*.rar
+
+# Backup files
+*.bak
+*.backup
+*~
+# Historical map test data and processing workspace
+server/scripts/test_downloads/
+server/scripts/test_output/
+server/scripts/test_output_sample/
+server/scripts/test_sample/
+server/scripts/usgs_downloads/
+server/scripts/usgs_test/
+server/scripts/historical_maps_workspace/
+server/scripts/source_data/*.csv
+server/scripts/source_data/*.gz
+!server/scripts/source_data/test_cell_towers.csv

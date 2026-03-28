@@ -1,0 +1,255 @@
+name: obsession_tracker
+description: "Your compass when nothing adds up. A privacy-first GPS tracking app for treasure hunters, explorers, and adventurers."
+version: 2.2.0+265
+publish_to: "none"
+homepage: https://github.com/Obsession-Community/obsession-tracker
+repository: https://github.com/Obsession-Community/obsession-tracker
+issue_tracker: https://github.com/Obsession-Community/obsession-tracker/issues
+
+environment:
+  sdk: ">=3.2.0 <4.0.0"
+  flutter: ">=3.16.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  # Dependencies sorted alphabetically
+  camera: ^0.12.0+1
+  # Local WiFi sync - HTTP server for device-to-device transfer
+  shelf: ^1.4.2
+  shelf_router: ^1.1.4
+  cupertino_icons: ^1.0.8
+  exif: ^3.3.0
+  flutter_compass: ^0.8.1
+  flutter_local_notifications: ^21.0.0
+  # flutter_map removed - now using Mapbox Maps SDK exclusively
+  mapbox_maps_flutter: ^2.11.0  # Mapbox Maps SDK for compliant offline maps
+  mobile_scanner: ^7.1.4  # QR code scanning for local sync
+  flutter_riverpod: ^3.0.3  # Riverpod 3.x with Notifier pattern
+  network_info_plus: ^7.0.0  # Get device IP for local sync
+  state_notifier: ^1.0.0  # Required for StateNotifier in Riverpod 3.x
+  flutter_svg: ^2.2.3
+  geolocator: ^14.0.2
+  http: ^1.6.0
+  image: ^4.5.4
+  intl: ^0.20.2
+  latlong2: ^0.9.1  # KEEP temporarily during migration, will remove after converting all files
+  logger: ^2.6.0
+  path: ^1.9.1
+  path_provider: ^2.1.5
+  permission_handler: ^12.0.1
+  # photo_manager removed - was unused and triggered NSPhotoLibraryUsageDescription requirement
+  sensors_plus: ^7.0.0
+  device_info_plus: ^12.2.0
+  package_info_plus: ^9.0.0
+  battery_plus: ^7.0.0
+  sqflite_sqlcipher: ^3.0.2
+  uuid: ^4.5.2
+  url_launcher: ^6.3.1
+  app_links: ^7.0.0  # Handle deep links and file associations (iOS/Android)
+  in_app_review: ^2.0.11
+  # Offline map caching dependencies
+  dio: ^5.8.0+1
+  connectivity_plus: ^7.0.0
+  archive: ^4.0.7
+  share_plus: ^12.0.1
+  photo_view: ^0.15.0
+  flutter_image_compress: ^2.4.0
+  # Audio recording and playback for voice notes
+  record: ^6.0.0
+  just_audio: ^0.10.5
+  audio_waveforms: ^2.0.0
+  # Preferences
+  shared_preferences: ^2.3.2
+  # Note: Removed unused accessibility packages (flutter_tts, speech_to_text, flutter_accessibility_service)
+  # Security and Privacy Dependencies for Milestone 6
+  encrypt: ^5.0.3
+  local_auth: ^3.0.0
+  flutter_secure_storage: ^10.0.0
+  crypto: ^3.0.7
+  pointycastle: ^3.9.1
+  qr_flutter: ^4.1.0  # QR code generation for local sync
+  # Direct in-app purchase integration (Apple StoreKit / Google Play Billing)
+  in_app_purchase: ^3.2.0
+  in_app_purchase_storekit: ^0.4.8+1  # iOS StoreKit
+  in_app_purchase_android: ^0.4.0+8    # Android Play Billing
+  # Firebase (messaging only - no analytics)
+  firebase_core: ^4.6.0
+  firebase_messaging: ^16.1.3
+  # In-app document viewing
+  pdfx: ^2.8.0  # PDF viewer for in-app document viewing
+  # WebView for desktop map (Mapbox GL JS)
+  webview_flutter: ^4.10.0  # Core WebView
+  webview_flutter_wkwebview: ^3.16.3  # macOS WebKit implementation
+
+  xml: any
+  web: ^1.0.0
+  file_picker: ^10.3.7
+  workmanager: any
+  bonsoir: ^6.0.1
+  # OpenNHP agent for invisible download server access
+  # Uncomment once native SDK is compiled - see opennhp/sdk/flutter/nhp_agent/README.md
+  # nhp_agent:
+  #   path: ../opennhp/sdk/flutter/nhp_agent
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  integration_test:
+    sdk: flutter
+
+  # Dev dependencies sorted alphabetically
+  build_runner: ^2.10.4
+  coverage: ^1.15.0
+  flutter_launcher_icons: ^0.14.4
+  flutter_lints: ^6.0.0
+  flutter_native_splash: ^2.4.3
+  # json_serializable removed - not used and conflicts with riverpod 3.x
+  mockito: ^5.6.1
+  sqflite_common_ffi: ^2.4.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    # App icons and branding
+    - assets/icons/
+    - assets/images/
+
+    # Waypoint icons
+    - assets/icons/waypoints/
+
+    # Map markers and overlays
+    - assets/icons/markers/
+
+    # UI elements
+    - assets/icons/ui/
+
+    # Default offline map tiles (if included)
+    # - assets/maps/
+
+    # Audio assets for notifications
+    - assets/audio/
+
+    # Animation files
+    - assets/animations/
+
+    # Desktop map WebView assets (Mapbox GL JS)
+    - assets/web/
+
+    # Demo hunt assets for screenshots (Beyond the Maps Edge)
+    - fastlane/btme/
+
+    # Screenshot test fixtures (state data for Android tests)
+    # These are only used during integration tests, not in release builds
+    - integration_test/fixtures/states/UT/
+
+  # fonts:
+  # Primary app font for readability (commented out until fonts are added)
+  # - family: Roboto
+  #   fonts:
+  #     - asset: fonts/Roboto-Regular.ttf
+  #     - asset: fonts/Roboto-Medium.ttf
+  #       weight: 500
+  #     - asset: fonts/Roboto-Bold.ttf
+  #       weight: 700
+  #
+  # # Monospace font for coordinates and technical data
+  # - family: RobotoMono
+  #   fonts:
+  #     - asset: fonts/RobotoMono-Regular.ttf
+  #     - asset: fonts/RobotoMono-Bold.ttf
+  #       weight: 700
+
+# Flutter-specific configuration
+flutter_intl:
+  enabled: true
+  class_name: S
+  main_locale: en
+  arb_dir: lib/l10n
+  output_dir: lib/generated
+# Platform-specific configurations will be handled in:
+# - android/app/build.gradle
+# - ios/Runner/Info.plist
+# - macos/Runner/Info.plist (future)
+# - windows/runner/main.cpp (future)
+
+# Key Dependencies Explained:
+#
+# Location Services:
+# - geolocator: Core GPS functionality with high accuracy
+# - permission_handler: Manage location and camera permissions
+# - compass_plus: Device compass for heading information
+#
+# Mapping:
+# - flutter_map: Powerful mapping widget with OpenStreetMap support
+# - latlong2: Geographic coordinate calculations
+# - cached_network_image: Efficient map tile caching
+#
+# Database:
+# - sqflite: SQLite database for local storage
+# - path_provider: Access to device storage directories
+#
+# Media:
+# - camera: In-app photo capture
+# - image: Photo processing and optimization
+# - record/just_audio: Voice note recording and playback
+#
+# Export/Import:
+# - file_picker: File selection for imports
+# - share_plus: Native sharing capabilities
+# - pdf/xml/csv: Multiple export format support
+#
+# Security:
+# - encrypt: Data encryption for privacy
+# - local_auth: Biometric authentication
+# - flutter_secure_storage: Secure key storage
+#
+# State Management:
+# - provider/riverpod: Reactive state management
+#
+# Performance Considerations:
+# - All dependencies chosen for minimal battery impact
+# - Offline-first architecture supported
+# - Efficient caching and storage mechanisms
+# - Platform-optimized implementations where available
+#
+# Privacy Compliance:
+# - No analytics or tracking dependencies
+# - No cloud service dependencies in core features
+# - Local-first storage and processing
+# - Optional network features only
+
+# Flutter Launcher Icons Configuration
+# Run: dart run flutter_launcher_icons
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/icon_source.png"
+  min_sdk_android: 21
+  remove_alpha_ios: true  # iOS requires no transparency
+  adaptive_icon_background: "#0D0B09"  # Dark background for Android adaptive icons
+  adaptive_icon_foreground: "assets/icon_source.png"
+  web:
+    generate: true
+    image_path: "assets/icon_source.png"
+  windows:
+    generate: true
+    image_path: "assets/icon_source.png"
+    icon_size: 48
+  macos:
+    generate: true
+    image_path: "assets/icon_source.png"
+
+# Flutter Native Splash Configuration
+flutter_native_splash:
+  color: "#000000"
+  image: assets/icon_source.png
+  android_12:
+    image: assets/icon_source.png
+    color: "#000000"
+  android: true
+  ios: true
+  web: false

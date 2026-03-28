@@ -1,0 +1,395 @@
+name: Security Scan
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    # Run weekly on Sundays at midnight UTC
+    - cron: '0 0 * * 0'
+  workflow_dispatch: # Allow manual triggering
+
+jobs:
+  flutter-security:
+    name: Flutter Security Audit
+    runs-on: self-hosted
+    timeout-minutes: 15
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        channel: 'stable'
+        cache: true
+
+    - name: Get dependencies
+      run: flutter pub get
+
+    - name: Run flutter pub audit
+      run: |
+        echo "## Flutter Dependency Audit" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+        # Run audit and capture output
+        flutter pub audit 2>&1 | tee audit-output.txt || true
+
+        # Check for vulnerabilities
+        if grep -qi "vulnerability\|affected" audit-output.txt; then
+          echo "⚠️ Security advisories found - review required" >> $GITHUB_STEP_SUMMARY
+          cat audit-output.txt >> $GITHUB_STEP_SUMMARY
+        else
+          echo "✅ No known vulnerabilities in dependencies" >> $GITHUB_STEP_SUMMARY
+        fi
+
+    - name: Check for outdated dependencies
+      run: |
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "## Outdated Dependencies" >> $GITHUB_STEP_SUMMARY
+        flutter pub outdated 2>&1 | head -50 >> $GITHUB_STEP_SUMMARY || true
+
+    - name: Upload audit results
+      uses: actions/upload-artifact@v7
+      if: always()
+      with:
+        name: flutter-audit-results
+        path: audit-output.txt
+
+  secret-scanning:
+    name: Secret Detection
+    runs-on: self-hosted
+    timeout-minutes: 15
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: TruffleHog Secret Scan (PR)
+      if: github.event_name == 'pull_request'
+      uses: trufflesecurity/trufflehog@v3.94.1
+      with:
+        path: ./
+        base: ${{ github.event.pull_request.base.sha }}
+        head: ${{ github.event.pull_request.head.sha }}
+        extra_args: --only-verified
+
+    - name: TruffleHog Secret Scan (Push)
+      if: github.event_name == 'push' && github.event.before != '0000000000000000000000000000000000000000'
+      uses: trufflesecurity/trufflehog@v3.94.1
+      continue-on-error: true  # Don't fail if base/head are same (rapid pushes)
+      with:
+        path: ./
+        base: ${{ github.event.before }}
+        head: ${{ github.sha }}
+        extra_args: --only-verified
+
+    # For scheduled/manual runs, scan recent commits (last 50 commits or 1 week)
+    - name: TruffleHog Secret Scan (Scheduled)
+      if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+      run: |
+        # Get commit from 7 days ago, fallback to 50 commits back
+        SINCE_COMMIT=$(git rev-list -n1 --before='7 days ago' HEAD 2>/dev/null || git rev-parse HEAD~50 2>/dev/null || echo "")
+        if [ -n "$SINCE_COMMIT" ]; then
+          echo "Scanning commits since $SINCE_COMMIT"
+          docker run --rm -v "$PWD:/repo" trufflesecurity/trufflehog:3.90.3 git file:///repo --since-commit=$SINCE_COMMIT --only-verified || true
+        else
+          echo "Scanning last 50 commits"
+          docker run --rm -v "$PWD:/repo" trufflesecurity/trufflehog:3.90.3 git file:///repo --max-depth=50 --only-verified || true
+        fi
+      continue-on-error: true
+
+    # Note: Gitleaks removed - requires paid license for organizations
+    # TruffleHog provides equivalent secret detection for free
+
+    - name: Custom API Key Check
+      run: |
+        echo "## API Key Exposure Check" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+        # Check for common API key patterns (excluding test files)
+        ISSUES_FOUND=0
+
+        # Check for exposed Mapbox tokens (public tokens start with pk.)
+        if grep -r "pk\.eyJ" --include="*.dart" --include="*.swift" --include="*.kt" --include="*.java" --include="*.gradle*" --include="*.plist" . 2>/dev/null | grep -v test | grep -v ".git"; then
+          echo "⚠️ Mapbox public token found in source files" >> $GITHUB_STEP_SUMMARY
+          ISSUES_FOUND=1
+        fi
+
+        # Check for secret tokens (sk.)
+        if grep -r "sk\.eyJ" --include="*.dart" --include="*.swift" --include="*.kt" --include="*.java" . 2>/dev/null | grep -v test | grep -v ".git"; then
+          echo "❌ Mapbox SECRET token found - this is a security issue!" >> $GITHUB_STEP_SUMMARY
+          exit 1
+        fi
+
+        # Check for hardcoded API keys
+        if grep -rE "(api[_-]?key|apikey|secret[_-]?key)\s*[:=]\s*['\"][a-zA-Z0-9]{20,}['\"]" --include="*.dart" . 2>/dev/null | grep -v test | grep -v ".git" | grep -v "// " | grep -v "/// "; then
+          echo "⚠️ Potential hardcoded API key found" >> $GITHUB_STEP_SUMMARY
+          ISSUES_FOUND=1
+        fi
+
+        if [ $ISSUES_FOUND -eq 0 ]; then
+          echo "✅ No secret keys detected in source code" >> $GITHUB_STEP_SUMMARY
+        fi
+
+  static-analysis:
+    name: Static Analysis (SAST)
+    runs-on: self-hosted
+    timeout-minutes: 15
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        channel: 'stable'
+        cache: true
+
+    - name: Get dependencies
+      run: flutter pub get
+
+    - name: Run Flutter Analyze (strict)
+      run: |
+        echo "## Static Analysis Results" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+        # Run analyze with strict mode
+        if flutter analyze --fatal-infos 2>&1 | tee analyze-output.txt; then
+          echo "✅ Static analysis passed with no issues" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "⚠️ Static analysis found issues:" >> $GITHUB_STEP_SUMMARY
+          cat analyze-output.txt >> $GITHUB_STEP_SUMMARY
+        fi
+
+    - name: Security-focused lint check
+      run: |
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "## Security Lint Check" >> $GITHUB_STEP_SUMMARY
+
+        # Check for print statements (debug info leakage)
+        PRINT_COUNT=$(grep -r "print(" --include="*.dart" lib/ 2>/dev/null | wc -l || echo "0")
+        if [ "$PRINT_COUNT" -gt "0" ]; then
+          echo "⚠️ Found $PRINT_COUNT print() statements - consider removing for production" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "✅ No print() statements in lib/" >> $GITHUB_STEP_SUMMARY
+        fi
+
+        # Check for debugPrint statements
+        DEBUG_COUNT=$(grep -r "debugPrint(" --include="*.dart" lib/ 2>/dev/null | wc -l || echo "0")
+        if [ "$DEBUG_COUNT" -gt "0" ]; then
+          echo "ℹ️ Found $DEBUG_COUNT debugPrint() statements (acceptable for debug builds)" >> $GITHUB_STEP_SUMMARY
+        fi
+
+        # Check for TODO/FIXME with security implications
+        SECURITY_TODOS=$(grep -rE "(TODO|FIXME).*(security|auth|encrypt|password|secret|key|token)" --include="*.dart" lib/ 2>/dev/null | wc -l || echo "0")
+        if [ "$SECURITY_TODOS" -gt "0" ]; then
+          echo "⚠️ Found $SECURITY_TODOS security-related TODOs - review before production" >> $GITHUB_STEP_SUMMARY
+        fi
+
+  native-code-scan:
+    name: Native Code Security Scan (mobsfscan)
+    runs-on: self-hosted
+    timeout-minutes: 15
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Run mobsfscan
+      uses: MobSF/mobsfscan@main
+      with:
+        args: '. --sarif --output results.sarif'
+      continue-on-error: true  # Flutter generates iOS code that triggers false positives
+
+    - name: Display results summary
+      if: always()
+      run: |
+        echo "## Native Code Security Scan (mobsfscan)" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        if [ -f results.sarif ]; then
+          # Count findings from SARIF
+          FINDING_COUNT=$(python3 -c "
+        import json, sys
+        try:
+            with open('results.sarif') as f:
+                data = json.load(f)
+            results = data.get('runs', [{}])[0].get('results', [])
+            print(len(results))
+        except:
+            print('0')
+        " 2>/dev/null || echo "0")
+          if [ "$FINDING_COUNT" -gt "0" ]; then
+            echo "⚠️ Found $FINDING_COUNT potential issues in native code (Android/iOS)" >> $GITHUB_STEP_SUMMARY
+            echo "Review results.sarif artifact for details" >> $GITHUB_STEP_SUMMARY
+            echo "Note: Flutter projects may have false positives - see https://docs.flutter.dev/reference/security-false-positives" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✅ No issues found in native code" >> $GITHUB_STEP_SUMMARY
+          fi
+        else
+          echo "ℹ️ No SARIF output generated" >> $GITHUB_STEP_SUMMARY
+        fi
+
+    - name: Upload SARIF to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@v4
+      if: always() && hashFiles('results.sarif') != ''
+      continue-on-error: true  # Requires GitHub Advanced Security on private repos
+      with:
+        sarif_file: results.sarif
+
+    - name: Upload scan results
+      uses: actions/upload-artifact@v7
+      if: always()
+      with:
+        name: mobsfscan-results
+        path: results.sarif
+
+  dependency-vulnerability-scan:
+    name: Dependency Vulnerability Scan (OSV-Scanner)
+    runs-on: self-hosted
+    timeout-minutes: 10
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Run OSV-Scanner
+      uses: google/osv-scanner-action/osv-scanner-action@v1
+      with:
+        scan-args: |-
+          --lockfile=pubspec.lock
+      continue-on-error: true  # Advisory-only, don't block pipeline initially
+
+    - name: Display results summary
+      if: always()
+      run: |
+        echo "## Dependency Vulnerability Scan (OSV-Scanner)" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "Scanned pubspec.lock against Google's OSV vulnerability database." >> $GITHUB_STEP_SUMMARY
+        echo "Check job logs above for any identified vulnerabilities." >> $GITHUB_STEP_SUMMARY
+
+  apk-analysis:
+    name: APK Security Analysis
+    runs-on: self-hosted
+    timeout-minutes: 30
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        channel: 'stable'
+        cache: true
+
+    - name: Setup Java
+      uses: actions/setup-java@v5
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+
+    - name: Get dependencies
+      run: flutter pub get
+
+    - name: Build release APK (with obfuscation)
+      run: |
+        flutter build apk --release \
+          --obfuscate \
+          --split-debug-info=build/app/outputs/symbols
+      continue-on-error: true  # May fail without signing key
+
+    - name: Install APKLeaks
+      run: |
+        pip install apkleaks
+      continue-on-error: true
+
+    - name: Scan APK for secrets
+      if: always()
+      run: |
+        APK_PATH=$(find build -name "*.apk" -type f | head -1 || echo "")
+        if [ -n "$APK_PATH" ]; then
+          echo "Scanning APK: $APK_PATH"
+          apkleaks -f "$APK_PATH" -o apkleaks-results.txt || true
+
+          echo "## APK Security Scan" >> $GITHUB_STEP_SUMMARY
+          if [ -f apkleaks-results.txt ] && [ -s apkleaks-results.txt ]; then
+            echo "⚠️ Potential secrets found in APK:" >> $GITHUB_STEP_SUMMARY
+            cat apkleaks-results.txt >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✅ No secrets detected in APK" >> $GITHUB_STEP_SUMMARY
+          fi
+        else
+          echo "ℹ️ No APK found for scanning (build may have failed)" >> $GITHUB_STEP_SUMMARY
+        fi
+      continue-on-error: true
+
+    - name: Upload security scan results
+      uses: actions/upload-artifact@v7
+      if: always()
+      with:
+        name: apk-security-results
+        path: |
+          apkleaks-results.txt
+          build/app/outputs/symbols/
+
+  # NOTE: dependency-review-action requires GitHub Advanced Security (paid for private repos)
+  # Using flutter pub audit instead, which is already in the flutter-security job
+
+  security-summary:
+    name: Security Summary
+    runs-on: self-hosted
+    timeout-minutes: 5
+    needs: [flutter-security, secret-scanning, static-analysis, native-code-scan, dependency-vulnerability-scan]
+    if: always()
+
+    steps:
+    - name: Generate summary
+      run: |
+        echo "## 🔒 Security Scan Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+        if [ "${{ needs.flutter-security.result }}" == "success" ]; then
+          echo "✅ Flutter Dependency Audit: Passed" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ Flutter Dependency Audit: Failed" >> $GITHUB_STEP_SUMMARY
+        fi
+
+        if [ "${{ needs.secret-scanning.result }}" == "success" ]; then
+          echo "✅ Secret Detection: Passed" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ Secret Detection: Failed" >> $GITHUB_STEP_SUMMARY
+        fi
+
+        if [ "${{ needs.static-analysis.result }}" == "success" ]; then
+          echo "✅ Static Analysis: Passed" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ Static Analysis: Failed" >> $GITHUB_STEP_SUMMARY
+        fi
+
+        if [ "${{ needs.native-code-scan.result }}" == "success" ]; then
+          echo "✅ Native Code Scan (mobsfscan): Passed" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "⚠️ Native Code Scan (mobsfscan): Issues found (non-blocking)" >> $GITHUB_STEP_SUMMARY
+        fi
+
+        if [ "${{ needs.dependency-vulnerability-scan.result }}" == "success" ]; then
+          echo "✅ Dependency Vulnerability Scan (OSV): Passed" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "⚠️ Dependency Vulnerability Scan (OSV): Issues found (non-blocking)" >> $GITHUB_STEP_SUMMARY
+        fi
+
+        # Fail if critical security checks failed
+        if [ "${{ needs.flutter-security.result }}" != "success" ] || \
+           [ "${{ needs.secret-scanning.result }}" != "success" ] || \
+           [ "${{ needs.static-analysis.result }}" != "success" ]; then
+          echo ""
+          echo "❌ Security scan failed - blocking merge"
+          exit 1
+        fi

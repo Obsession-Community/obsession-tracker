@@ -1,0 +1,19 @@
+# Test configuration for obsession_tracker
+
+# Default timeout for all tests
+timeout: 30s
+
+tags:
+  # Tag for tests that use the shared database
+  # These tests share a singleton service and DB file
+  database:
+    timeout: 2m
+
+  # Tag for integration tests that require device/emulator
+  # Skip in CI unit tests: flutter test --exclude-tags=integration
+  integration:
+    timeout: 5m
+
+  # Tag for slow tests (network, heavy computation)
+  slow:
+    timeout: 2m
