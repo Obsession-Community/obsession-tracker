@@ -1,0 +1,30 @@
+# Fastlane-specific
+*.cer
+*.certSigningRequest
+*.mobileprovision
+*.p12
+*.p8
+*.jks
+*.keystore
+google-play-key.json
+gc_keys.json
+
+# Fastlane reports
+report.xml
+test_output/
+screenshots/.cache/
+
+# Fastlane build artifacts
+*.app
+*.ipa
+*.dSYM.zip
+*.apk
+*.aab
+
+# Fastlane local config
+# .env.default is committed as a template
+.env
+.env.secret
+
+# macOS
+.DS_Store

@@ -1,0 +1,30 @@
+version: 2
+updates:
+  # Dart/Flutter dependencies (pubspec.yaml)
+  - package-ecosystem: "pub"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    target-branch: "main"
+    open-pull-requests-limit: 10
+    groups:
+      # Group minor and patch updates to reduce PR noise
+      flutter-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  # GitHub Actions versions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    target-branch: "main"
+    open-pull-requests-limit: 5
+    groups:
+      actions-updates:
+        update-types:
+          - "minor"
+          - "patch"

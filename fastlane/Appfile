@@ -1,0 +1,16 @@
+# Appfile for Obsession Tracker
+# Documentation: https://docs.fastlane.tools/advanced/Appfile/
+
+# iOS Configuration
+app_identifier(ENV["APP_IDENTIFIER"] || "com.obsessioncommunity.tracker") # Bundle ID - override via APP_IDENTIFIER env var
+apple_id(ENV["APPLE_ID"]) # Your Apple Developer Portal email address
+
+team_id(ENV["APPLE_TEAM_ID"] || "REPLACE_ME") # Developer Portal Team ID
+itc_team_id(ENV["ITC_TEAM_ID"] || "REPLACE_ME") # App Store Connect Team ID
+
+# Android Configuration
+json_key_file(ENV["GOOGLE_PLAY_JSON_KEY_PATH"]) # Path to the json secret file
+package_name("com.obsessiontracker.app") # Package name from AndroidManifest.xml
+
+# For more information about the Appfile, see:
+#     https://docs.fastlane.tools/advanced/Appfile/

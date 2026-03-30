@@ -1,0 +1,6 @@
+#include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.release.xcconfig"
+#include "Generated.xcconfig"
+
+// Mapbox access token - set via environment or local.xcconfig
+// ACCESS_TOKEN should be provided at build time
+ACCESS_TOKEN=$(MAPBOX_ACCESS_TOKEN)

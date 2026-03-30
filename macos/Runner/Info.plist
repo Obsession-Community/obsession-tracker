@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIconFile</key>
+	<string></string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(FLUTTER_BUILD_NAME)</string>
+	<key>CFBundleVersion</key>
+	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
+	<key>NSHumanReadableCopyright</key>
+	<string>$(PRODUCT_COPYRIGHT)</string>
+	<key>NSMainNibFile</key>
+	<string>MainMenu</string>
+	<key>NSPrincipalClass</key>
+	<string>NSApplication</string>
+	<key>CFBundleDisplayName</key>
+	<string>Obsession</string>
+	<key>MBXAccessToken</key>
+	<string>$(ACCESS_TOKEN)</string>
+	<!-- Privacy: Disable Mapbox telemetry to prevent location/usage data collection -->
+	<key>MBXEventsDisabled</key>
+	<true/>
+	<key>MGLMapboxMetricsEnabled</key>
+	<false/>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.navigation</string>
+	<key>NSLocationUsageDescription</key>
+	<string>Obsession Tracker uses your location to center the map on your position and show nearby land ownership data.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Obsession Tracker needs access to your location to track your GPS trail and mark waypoints during treasure hunting adventures.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Obsession Tracker needs access to your location even when the app is in the background to continue tracking your GPS breadcrumb trail.</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>Obsession Tracker uses background location to maintain your GPS trail even when the app is not actively in use.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Obsession Tracker uses local network to sync data with your other devices. Your data stays on your local network and is never sent to external servers.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_obstrack._tcp</string>
+	</array>
+</dict>
+</plist>

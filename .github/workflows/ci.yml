@@ -1,0 +1,119 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  # Note: pull_request trigger removed for self-hosted runner security.
+  # Fork PRs could execute arbitrary code on the runner.
+  # PRs are tested when merged to main/develop.
+
+jobs:
+  test:
+    name: Test and Analyze
+    runs-on: self-hosted
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        channel: 'stable'
+        cache: true
+
+    - name: Generate Firebase config placeholders
+      run: |
+        cp lib/firebase_options.dart.example lib/firebase_options.dart
+        cat > android/app/google-services.json << 'GSEOF'
+        {"project_info":{"project_number":"000000000000","project_id":"placeholder","storage_bucket":"placeholder.appspot.com"},"client":[{"client_info":{"mobilesdk_app_id":"1:000000000000:android:0000000000000000","android_client_info":{"package_name":"com.obsessiontracker.app"}},"api_key":[{"current_key":"placeholder"}]}],"configuration_version":"1"}
+        GSEOF
+        mkdir -p ios/Runner
+        cat > ios/Runner/GoogleService-Info.plist << 'GIEOF'
+        <?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        <plist version="1.0"><dict>
+        <key>API_KEY</key><string>placeholder</string>
+        <key>GCM_SENDER_ID</key><string>000000000000</string>
+        <key>PLIST_VERSION</key><string>1</string>
+        <key>BUNDLE_ID</key><string>com.obsessioncommunity.tracker</string>
+        <key>PROJECT_ID</key><string>placeholder</string>
+        <key>STORAGE_BUCKET</key><string>placeholder.appspot.com</string>
+        <key>IS_ADS_ENABLED</key><false/>
+        <key>IS_ANALYTICS_ENABLED</key><false/>
+        <key>IS_APPINVITE_ENABLED</key><false/>
+        <key>IS_GCM_ENABLED</key><true/>
+        <key>IS_SIGNIN_ENABLED</key><false/>
+        <key>GOOGLE_APP_ID</key><string>1:000000000000:ios:0000000000000000</string>
+        </dict></plist>
+        GIEOF
+
+    - name: Get dependencies
+      run: flutter pub get
+
+    - name: Analyze project source
+      run: flutter analyze --no-fatal-infos --no-fatal-warnings
+
+    - name: Run tests with coverage
+      run: |
+        flutter test --coverage --machine > test-results.json 2>&1 || true
+        flutter test --coverage
+
+    - name: Install lcov (if needed)
+      run: |
+        if ! command -v lcov &> /dev/null; then
+          echo "Installing lcov..."
+          arch -arm64 brew install lcov
+        fi
+
+    - name: Generate coverage report
+      run: |
+        # Generate summary
+        echo "## Test Coverage Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+        lcov --summary coverage/lcov.info 2>&1 | tee -a $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+        # Extract line coverage percentage
+        COVERAGE=$(lcov --summary coverage/lcov.info 2>&1 | grep "lines" | awk '{print $2}' | tr -d '%')
+        echo "Line coverage: ${COVERAGE}%"
+        echo "**Line Coverage: ${COVERAGE}%**" >> $GITHUB_STEP_SUMMARY
+
+    - name: Generate HTML coverage report
+      run: |
+        genhtml coverage/lcov.info -o coverage/html --quiet
+        echo "Coverage report generated at coverage/html/index.html"
+
+    - name: Create test summary
+      if: always()
+      run: |
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "## Test Results" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+        # Count tests from flutter test output
+        TEST_COUNT=$(flutter test 2>&1 | grep -E "^\+[0-9]+" | tail -1 | grep -oE "\+[0-9]+" | tr -d '+' || echo "0")
+        echo "✅ **$TEST_COUNT tests passed**" >> $GITHUB_STEP_SUMMARY
+
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "---" >> $GITHUB_STEP_SUMMARY
+        echo "_Coverage report available in artifacts_" >> $GITHUB_STEP_SUMMARY
+
+    - name: Upload coverage report
+      uses: actions/upload-artifact@v7
+      with:
+        name: coverage-report
+        path: coverage/html/
+        retention-days: 14
+
+    - name: Upload coverage data
+      uses: actions/upload-artifact@v7
+      with:
+        name: coverage-lcov
+        path: coverage/lcov.info
+        retention-days: 14
+
+    # Note: Builds and deployment are handled locally via Fastlane.
+    # CI focuses on testing, analysis, and coverage.
