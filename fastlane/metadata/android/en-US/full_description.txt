@@ -1,0 +1,82 @@
+Memories are the real treasure.
+
+Whether or not you find gold, you'll leave every adventure with something priceless - the photos, voice memos, notes, and stories that capture your journey. People you meet. Places you discover. Things you learn. That's the treasure.
+
+Obsession Tracker helps you capture and protect these memories. Everything stays on YOUR device—no account, no cloud, no tracking. Your adventures remain yours forever.
+
+CAPTURE YOUR MEMORIES
+• Geotagged photos with direction, elevation, and timestamp
+• Voice memos to capture your thoughts in the moment
+• Notes and waypoints to remember what matters
+• Journey replay to relive every step
+• Export to Trail Tales to share your story
+
+PRIVACY-FIRST DESIGN
+• No account required—ever
+• No cloud storage—data never leaves your device
+• AES-256 military-grade encryption
+• Export as encrypted .otx files only YOU can open
+• Works completely offline
+
+LAND PERMISSIONS
+Shows where metal detecting and treasure hunting are allowed on public lands:
+• Allowed without restrictions
+• Prohibited (restricted)
+• Requires permit
+• Requires owner permission
+
+Get real-time alerts when entering restricted areas.
+
+PUBLIC LAND DATA COVERAGE (U.S. ONLY)
+Land ownership data covers the continental United States.
+
+• National Forests (U.S. Forest Service)
+• BLM Public Lands (Bureau of Land Management)
+• National Parks (National Park Service)
+• Wildlife Refuges (U.S. Fish & Wildlife Service)
+• State Parks & Protected Areas (via PAD-US dataset)
+• Historical places: mines, ghost towns, cemeteries (USGS GNIS)
+• 100,000+ miles of trails (OpenStreetMap)
+
+SAFETY RESOURCES
+Built-in wilderness safety: Ten Essentials, wildlife awareness, S.T.O.P. protocol.
+
+GPS TRACKING
+• Unlimited waypoints and geotagged photos
+• Breadcrumb trails with elevation
+• Route planning, GPX/KML import/export
+• Offline maps
+• Session playback
+
+OFFLINE CAPABLE (Premium)
+Download land data for entire states. Search completely offline—no cell service needed.
+
+50% LESS THAN COMPETITORS
+$49.99/year vs $99.99/year. No upsells.
+
+FREE TIER:
+• Unlimited GPS tracking
+• All waypoint types
+• Geotagged photos
+• GPX/KML export
+
+PREMIUM ($49.99/year):
+• Full public land data
+• Activity permissions
+• Real-time alerts
+• Trail data
+• Offline state downloads
+
+PERFECT FOR: Metal detectorists, treasure hunters, relic hunters, gold prospectors, beachcombers.
+
+7-DAY FREE TRIAL - No credit card required.
+
+---
+
+IMPORTANT: Not affiliated with any government agency. Land data sourced from publicly available U.S. government datasets for informational purposes only. Always verify with local authorities.
+
+DATA SOURCES: PAD-US (USGS), National Forest System (USFS), Public Land Survey System (BLM), National Parks (NPS), Wildlife Refuges (USFWS), GNIS (USGS), Historical Topos (USGS HTMC), Trails (OpenStreetMap), Maps (Mapbox). Full links in-app under More > Data Sources & Legal.
+
+Questions? support@obsessiontracker.com
+
+Capture every adventure. Protect every memory. Because the journey is the treasure.

@@ -1,0 +1,17 @@
+{
+  "id": "gps_not_working",
+  "title": "GPS Not Working",
+  "description": "Common GPS issues and solutions for location tracking problems",
+  "type": "faq",
+  "context": "tracking",
+  "difficulty": "beginner",
+  "priority": "high",
+  "tags": ["gps", "location", "troubleshooting", "permissions"],
+  "prerequisites": [],
+  "estimated_duration_minutes": 2,
+  "version": "1.0.0",
+  "question": "Why is my GPS not working or showing inaccurate location?",
+  "answer": "GPS issues can occur for several reasons:\n\n1. **Location Permissions**: Make sure Obsession Tracker has location permissions enabled in your device settings.\n\n2. **GPS Signal**: GPS works best outdoors with a clear view of the sky. Buildings, trees, and weather can interfere with GPS signals.\n\n3. **Device Settings**: Ensure your device's location services are turned on and set to 'High Accuracy' mode.\n\n4. **Cold Start**: When first starting the app, GPS may take 30-60 seconds to get an accurate fix.\n\n5. **Battery Optimization**: Check that your device isn't aggressively optimizing battery usage for the app, which can limit GPS functionality.\n\nIf problems persist, try restarting the app or your device.",
+  "related_faqs": ["battery_drain", "location_permissions"],
+  "category": "GPS & Location"
+}

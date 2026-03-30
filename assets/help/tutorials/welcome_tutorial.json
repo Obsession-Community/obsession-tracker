@@ -1,0 +1,56 @@
+{
+  "id": "welcome_tutorial",
+  "title": "Welcome to Obsession Tracker",
+  "description": "Learn the basics of using Obsession Tracker for GPS tracking and outdoor adventures",
+  "type": "tutorial",
+  "context": "home",
+  "difficulty": "beginner",
+  "priority": "high",
+  "tags": ["welcome", "basics", "getting-started"],
+  "prerequisites": [],
+  "estimated_duration_minutes": 5,
+  "version": "1.0.0",
+  "is_interactive": true,
+  "can_skip": true,
+  "show_progress": true,
+  "steps": [
+    {
+      "id": "step_1",
+      "title": "Welcome to Obsession Tracker",
+      "content": "Welcome to Obsession Tracker! This app helps you track your outdoor adventures with privacy-first GPS tracking. Let's get you started with the basics.",
+      "highlight_widget": false,
+      "show_overlay": false
+    },
+    {
+      "id": "step_2",
+      "title": "Navigation Basics",
+      "content": "Use the bottom navigation bar to switch between different sections: Home, Photos, Sessions, and Track. Each section has specific features for your outdoor adventures.",
+      "target_widget": "bottom_navigation",
+      "highlight_widget": true,
+      "show_overlay": true
+    },
+    {
+      "id": "step_3",
+      "title": "Start Your First Track",
+      "content": "Tap the 'Track' tab to begin your first GPS tracking session. This is where you'll record your routes, add waypoints, and capture photo memories.",
+      "target_widget": "track_tab",
+      "highlight_widget": true,
+      "show_overlay": true
+    },
+    {
+      "id": "step_4",
+      "title": "Privacy First",
+      "content": "Your location data stays on your device. Obsession Tracker is designed with privacy in mind - your adventures are yours alone unless you choose to share them.",
+      "highlight_widget": false,
+      "show_overlay": false
+    },
+    {
+      "id": "step_5",
+      "title": "Get Help Anytime",
+      "content": "Need help? Tap the help button in the navigation rail or use the floating help button for quick assistance. You're all set to start exploring!",
+      "target_widget": "help_button",
+      "highlight_widget": true,
+      "show_overlay": true
+    }
+  ]
+}

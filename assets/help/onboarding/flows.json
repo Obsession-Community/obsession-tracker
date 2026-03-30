@@ -1,0 +1,94 @@
+{
+  "flows": [
+    {
+      "id": "first_time_user",
+      "name": "First Time User Onboarding",
+      "description": "Complete introduction to Obsession Tracker for new users",
+      "steps": [
+        {
+          "id": "welcome_tutorial",
+          "title": "Welcome to Obsession Tracker",
+          "description": "Learn the basics of using Obsession Tracker for GPS tracking and outdoor adventures",
+          "type": "tutorial",
+          "context": "home",
+          "difficulty": "beginner",
+          "priority": "high",
+          "tags": ["welcome", "basics", "getting-started"],
+          "prerequisites": [],
+          "estimated_duration_minutes": 5,
+          "version": "1.0.0",
+          "is_interactive": true,
+          "can_skip": true,
+          "show_progress": true,
+          "steps": [
+            {
+              "id": "step_1",
+              "title": "Welcome to Obsession Tracker",
+              "content": "Welcome to Obsession Tracker! This app helps you track your outdoor adventures with privacy-first GPS tracking. Let's get you started with the basics."
+            },
+            {
+              "id": "step_2",
+              "title": "Privacy First Approach",
+              "content": "Your location data stays on your device. Obsession Tracker is designed with privacy in mind - your adventures are yours alone unless you choose to share them."
+            },
+            {
+              "id": "step_3",
+              "title": "Main Features",
+              "content": "Track your routes, capture photo waypoints, manage sessions, and explore with confidence. Everything you need for outdoor adventures in one app."
+            }
+          ]
+        }
+      ],
+      "is_required": false,
+      "target_user_type": "new_user",
+      "minimum_app_version": "1.0.0",
+      "show_on_first_launch": true,
+      "can_skip": true
+    },
+    {
+      "id": "advanced_features",
+      "name": "Advanced Features Tour",
+      "description": "Discover advanced features for experienced users",
+      "steps": [
+        {
+          "id": "advanced_tutorial",
+          "title": "Advanced Features",
+          "description": "Explore advanced GPS tracking features and customization options",
+          "type": "tutorial",
+          "context": "tracking",
+          "difficulty": "intermediate",
+          "priority": "medium",
+          "tags": ["advanced", "features", "customization"],
+          "prerequisites": ["welcome_tutorial"],
+          "estimated_duration_minutes": 8,
+          "version": "1.0.0",
+          "is_interactive": true,
+          "can_skip": true,
+          "show_progress": true,
+          "steps": [
+            {
+              "id": "step_1",
+              "title": "Advanced GPS Settings",
+              "content": "Learn how to customize GPS accuracy, tracking intervals, and battery optimization for your specific needs."
+            },
+            {
+              "id": "step_2",
+              "title": "Photo Waypoints",
+              "content": "Discover how to capture and organize photo waypoints with metadata, tags, and custom categories."
+            },
+            {
+              "id": "step_3",
+              "title": "Data Export & Backup",
+              "content": "Learn how to export your tracking data in various formats and set up automatic backups."
+            }
+          ]
+        }
+      ],
+      "is_required": false,
+      "target_user_type": "experienced_user",
+      "minimum_app_version": "1.0.0",
+      "show_on_first_launch": false,
+      "can_skip": true
+    }
+  ]
+}

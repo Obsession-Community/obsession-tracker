@@ -1,0 +1,40 @@
+TESTING PREMIUM FEATURES
+
+This app offers a 7-day free trial for Premium features via in-app purchase. Apple's test environment will allow you to test subscriptions without being charged.
+
+HOW TO TEST:
+1. Open the app (no account required)
+2. Tap on any Premium feature (land ownership data, permission alerts, or offline maps)
+3. The subscription prompt will appear
+4. Use Apple's sandbox test account to complete the purchase
+5. Premium features will unlock immediately
+
+PREMIUM FEATURES TO TEST:
+• Land ownership overlay on map (shows property boundaries)
+• Activity permissions (tap any property to see metal detecting permissions)
+• Real-time permission alerts (when entering restricted areas)
+• Offline map download (tap map settings > download region)
+
+FREE FEATURES (available without subscription):
+• GPS tracking with breadcrumb trail
+• Waypoint creation (finds, search sites, targets)
+• Photo capture with GPS coordinates
+• Session playback
+• GPX/KML export
+
+SUBSCRIPTION DETAILS:
+• 7-day free trial (auto-renews)
+• Monthly: $6.99/month
+• Annual: $49.99/year
+• Managed via StoreKit
+
+NO DEMO ACCOUNT NEEDED:
+The app does not require user accounts. All features are accessible immediately upon launch.
+
+IMPORTANT NOTES:
+• All user data is stored locally on device (no cloud storage)
+• Location permission required for core functionality
+• Backend API for land ownership data: https://api.obsessiontracker.com
+• Privacy policy: https://obsessiontracker.com/privacy.html
+
+If you experience any issues testing Premium features, please contact support@obsessiontracker.com

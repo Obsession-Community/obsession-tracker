@@ -1,0 +1,8 @@
+Obsession Tracker is now open source! Verify our privacy claims yourself at github.com/Obsession-Community/obsession-tracker
+
+What's new in v2.2.0:
+- Updated all dependencies for improved stability and security
+- Enhanced subscription management
+- Bug fixes and performance improvements
+
+Your data stays on your device.
