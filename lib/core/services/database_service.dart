@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:obsession_tracker/core/models/breadcrumb.dart';
 import 'package:obsession_tracker/core/models/custom_marker.dart';
+import 'package:obsession_tracker/core/models/custom_north_reference.dart';
 import 'package:obsession_tracker/core/models/imported_route.dart';
 import 'package:obsession_tracker/core/models/marker_attachment.dart';
 import 'package:obsession_tracker/core/models/session_statistics.dart';
@@ -44,10 +45,10 @@ class DatabaseService {
   }
 
   Database? _database;
-  Future<Database>? _initializationFuture;  // Prevents concurrent initialization
+  Future<Database>? _initializationFuture; // Prevents concurrent initialization
   bool _isInitializing = false;
   static const String _databaseName = 'obsession_tracker.db';
-  static const int _databaseVersion = 15;
+  static const int _databaseVersion = 16;
 
   /// Tables
   static const String _sessionsTable = 'sessions';
@@ -83,6 +84,8 @@ class DatabaseService {
   static const String _sessionStreaksTable = 'session_streaks';
   // Journal table (v15)
   static const String _journalEntriesTable = 'journal_entries';
+  // Custom North references (v16)
+  static const String _customNorthReferencesTable = 'custom_north_references';
 
   /// Get the database instance, creating it if necessary
   ///
@@ -153,7 +156,8 @@ class DatabaseService {
             originalError: Exception('Encryption key lost after app transfer'),
           );
         }
-        debugPrint('Detected unencrypted database - migrating to encrypted format...');
+        debugPrint(
+            'Detected unencrypted database - migrating to encrypted format...');
         return await _migrateToEncrypted(path, encryptionKey);
       }
 
@@ -206,12 +210,27 @@ class DatabaseService {
       );
       // SQLite magic header: "SQLite format 3\0"
       const sqliteHeader = [
-        0x53, 0x51, 0x4c, 0x69, 0x74, 0x65, 0x20, 0x66,
-        0x6f, 0x72, 0x6d, 0x61, 0x74, 0x20, 0x33, 0x00,
+        0x53,
+        0x51,
+        0x4c,
+        0x69,
+        0x74,
+        0x65,
+        0x20,
+        0x66,
+        0x6f,
+        0x72,
+        0x6d,
+        0x61,
+        0x74,
+        0x20,
+        0x33,
+        0x00,
       ];
       if (bytes.length < 16) return true; // Too small to be valid SQLite
       for (int i = 0; i < 16; i++) {
-        if (bytes[i] != sqliteHeader[i]) return true; // Not plain SQLite = encrypted
+        if (bytes[i] != sqliteHeader[i])
+          return true; // Not plain SQLite = encrypted
       }
       return false; // Matches SQLite header = unencrypted
     } catch (e) {
@@ -263,7 +282,8 @@ class DatabaseService {
       await EncryptionKeyService.resetDatabaseKey();
       debugPrint('✅ Encryption key reset');
 
-      debugPrint('✅ Database reset complete - app will create fresh database on next access');
+      debugPrint(
+          '✅ Database reset complete - app will create fresh database on next access');
     } catch (e) {
       debugPrint('❌ Error during database reset: $e');
       rethrow;
@@ -287,7 +307,8 @@ class DatabaseService {
   }
 
   /// Migrate existing unencrypted database to encrypted format
-  Future<Database> _migrateToEncrypted(String path, String encryptionKey) async {
+  Future<Database> _migrateToEncrypted(
+      String path, String encryptionKey) async {
     final backupPath = '$path.backup';
 
     try {
@@ -424,8 +445,7 @@ class DatabaseService {
 
       // Create index for hunt-based session queries
       await db.execute(
-        'CREATE INDEX IF NOT EXISTS idx_sessions_hunt_id ON $_sessionsTable (hunt_id)'
-      );
+          'CREATE INDEX IF NOT EXISTS idx_sessions_hunt_id ON $_sessionsTable (hunt_id)');
 
       // Create breadcrumbs table
       await db.execute('''
@@ -766,7 +786,7 @@ class DatabaseService {
         )
       ''');
 
-      // Create waypoint metadata table  
+      // Create waypoint metadata table
       await db.execute('''
         CREATE TABLE $_waypointMetadataTable (
           waypoint_id TEXT PRIMARY KEY,
@@ -1254,6 +1274,18 @@ class DatabaseService {
         CREATE INDEX idx_journal_entries_type ON $_journalEntriesTable (entry_type)
       ''');
 
+      // Custom North references table (v16)
+      await db.execute('''
+        CREATE TABLE $_customNorthReferencesTable (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          latitude REAL NOT NULL,
+          longitude REAL NOT NULL,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER
+        )
+      ''');
+
       debugPrint('Database tables created successfully');
     } catch (e) {
       debugPrint('Error creating database tables: $e');
@@ -1286,14 +1318,20 @@ class DatabaseService {
     try {
       // Version 1 -> 2: Add orientation metadata to photo_waypoints table
       if (oldVersion < 2) {
-        debugPrint('📸 Adding orientation metadata columns to photo_waypoints table...');
+        debugPrint(
+            '📸 Adding orientation metadata columns to photo_waypoints table...');
 
         // Add new columns for device orientation (safely)
-        await _addColumnIfNotExists(db, _photoWaypointsTable, 'device_pitch', 'REAL');
-        await _addColumnIfNotExists(db, _photoWaypointsTable, 'device_roll', 'REAL');
-        await _addColumnIfNotExists(db, _photoWaypointsTable, 'device_yaw', 'REAL');
-        await _addColumnIfNotExists(db, _photoWaypointsTable, 'photo_orientation', 'TEXT');
-        await _addColumnIfNotExists(db, _photoWaypointsTable, 'camera_tilt_angle', 'REAL');
+        await _addColumnIfNotExists(
+            db, _photoWaypointsTable, 'device_pitch', 'REAL');
+        await _addColumnIfNotExists(
+            db, _photoWaypointsTable, 'device_roll', 'REAL');
+        await _addColumnIfNotExists(
+            db, _photoWaypointsTable, 'device_yaw', 'REAL');
+        await _addColumnIfNotExists(
+            db, _photoWaypointsTable, 'photo_orientation', 'TEXT');
+        await _addColumnIfNotExists(
+            db, _photoWaypointsTable, 'camera_tilt_angle', 'REAL');
 
         debugPrint('✅ Successfully added orientation metadata columns');
       }
@@ -1368,25 +1406,36 @@ class DatabaseService {
         ''');
 
         // Create indexes
-        await db.execute('CREATE INDEX IF NOT EXISTS idx_treasure_hunts_status ON $_treasureHuntsTable (status)');
-        await db.execute('CREATE INDEX IF NOT EXISTS idx_treasure_hunts_created_at ON $_treasureHuntsTable (created_at)');
-        await db.execute('CREATE INDEX IF NOT EXISTS idx_hunt_documents_hunt_id ON $_huntDocumentsTable (hunt_id)');
-        await db.execute('CREATE INDEX IF NOT EXISTS idx_hunt_documents_type ON $_huntDocumentsTable (type)');
-        await db.execute('CREATE INDEX IF NOT EXISTS idx_hunt_session_links_hunt_id ON $_huntSessionLinksTable (hunt_id)');
-        await db.execute('CREATE INDEX IF NOT EXISTS idx_hunt_session_links_session_id ON $_huntSessionLinksTable (session_id)');
-        await db.execute('CREATE INDEX IF NOT EXISTS idx_hunt_locations_hunt_id ON $_huntLocationsTable (hunt_id)');
-        await db.execute('CREATE INDEX IF NOT EXISTS idx_hunt_locations_status ON $_huntLocationsTable (status)');
+        await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_treasure_hunts_status ON $_treasureHuntsTable (status)');
+        await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_treasure_hunts_created_at ON $_treasureHuntsTable (created_at)');
+        await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_hunt_documents_hunt_id ON $_huntDocumentsTable (hunt_id)');
+        await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_hunt_documents_type ON $_huntDocumentsTable (type)');
+        await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_hunt_session_links_hunt_id ON $_huntSessionLinksTable (hunt_id)');
+        await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_hunt_session_links_session_id ON $_huntSessionLinksTable (session_id)');
+        await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_hunt_locations_hunt_id ON $_huntLocationsTable (hunt_id)');
+        await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_hunt_locations_status ON $_huntLocationsTable (status)');
 
         debugPrint('✅ Successfully added treasure hunts tables');
       }
 
       // Version 3 -> 4: Add real-time tracking stats columns to sessions table
       if (oldVersion < 4) {
-        debugPrint('📊 Adding real-time tracking stats columns to sessions table...');
+        debugPrint(
+            '📊 Adding real-time tracking stats columns to sessions table...');
 
         // Add elevation tracking columns (safely)
-        await _addColumnIfNotExists(db, _sessionsTable, 'elevation_gain', 'REAL NOT NULL DEFAULT 0.0');
-        await _addColumnIfNotExists(db, _sessionsTable, 'elevation_loss', 'REAL NOT NULL DEFAULT 0.0');
+        await _addColumnIfNotExists(
+            db, _sessionsTable, 'elevation_gain', 'REAL NOT NULL DEFAULT 0.0');
+        await _addColumnIfNotExists(
+            db, _sessionsTable, 'elevation_loss', 'REAL NOT NULL DEFAULT 0.0');
         await _addColumnIfNotExists(db, _sessionsTable, 'max_altitude', 'REAL');
         await _addColumnIfNotExists(db, _sessionsTable, 'min_altitude', 'REAL');
 
@@ -1404,8 +1453,7 @@ class DatabaseService {
 
         // Create index for faster hunt-based queries
         await db.execute(
-          'CREATE INDEX IF NOT EXISTS idx_sessions_hunt_id ON $_sessionsTable (hunt_id)'
-        );
+            'CREATE INDEX IF NOT EXISTS idx_sessions_hunt_id ON $_sessionsTable (hunt_id)');
 
         debugPrint('✅ Successfully added hunt_id column to sessions table');
       }
@@ -1416,7 +1464,8 @@ class DatabaseService {
 
         await _addColumnIfNotExists(db, _photoWaypointsTable, 'source', 'TEXT');
 
-        debugPrint('✅ Successfully added source column to photo_waypoints table');
+        debugPrint(
+            '✅ Successfully added source column to photo_waypoints table');
       }
 
       // Version 6 -> 7: Add custom markers and marker attachments tables
@@ -1473,14 +1522,20 @@ class DatabaseService {
         ''');
 
         // Create indexes for custom markers
-        await db.execute('CREATE INDEX IF NOT EXISTS idx_custom_markers_category ON $_customMarkersTable (category)');
-        await db.execute('CREATE INDEX IF NOT EXISTS idx_custom_markers_coords ON $_customMarkersTable (latitude, longitude)');
-        await db.execute('CREATE INDEX IF NOT EXISTS idx_custom_markers_hunt_id ON $_customMarkersTable (hunt_id)');
-        await db.execute('CREATE INDEX IF NOT EXISTS idx_custom_markers_created_at ON $_customMarkersTable (created_at)');
+        await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_custom_markers_category ON $_customMarkersTable (category)');
+        await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_custom_markers_coords ON $_customMarkersTable (latitude, longitude)');
+        await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_custom_markers_hunt_id ON $_customMarkersTable (hunt_id)');
+        await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_custom_markers_created_at ON $_customMarkersTable (created_at)');
 
         // Create indexes for marker attachments
-        await db.execute('CREATE INDEX IF NOT EXISTS idx_marker_attachments_marker_id ON $_markerAttachmentsTable (marker_id)');
-        await db.execute('CREATE INDEX IF NOT EXISTS idx_marker_attachments_type ON $_markerAttachmentsTable (type)');
+        await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_marker_attachments_marker_id ON $_markerAttachmentsTable (marker_id)');
+        await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_marker_attachments_type ON $_markerAttachmentsTable (type)');
 
         debugPrint('✅ Successfully added custom markers tables');
       }
@@ -1488,7 +1543,8 @@ class DatabaseService {
       // Version 7 -> 8: Make session_id nullable for standalone waypoints
       // and add category column
       if (oldVersion < 8) {
-        debugPrint('📍 Migrating waypoints table for standalone waypoint support...');
+        debugPrint(
+            '📍 Migrating waypoints table for standalone waypoint support...');
 
         // SQLite doesn't support ALTER COLUMN to remove NOT NULL constraint,
         // so we need to recreate the table. However, since existing data already
@@ -1528,34 +1584,42 @@ class DatabaseService {
         await db.execute('DROP TABLE $_waypointsTable');
 
         // Rename new table
-        await db.execute('ALTER TABLE waypoints_new RENAME TO $_waypointsTable');
+        await db
+            .execute('ALTER TABLE waypoints_new RENAME TO $_waypointsTable');
 
         // Recreate indexes
-        await db.execute('CREATE INDEX idx_waypoints_session_id ON $_waypointsTable (session_id)');
-        await db.execute('CREATE INDEX idx_waypoints_timestamp ON $_waypointsTable (timestamp)');
-        await db.execute('CREATE INDEX idx_waypoints_type ON $_waypointsTable (type)');
+        await db.execute(
+            'CREATE INDEX idx_waypoints_session_id ON $_waypointsTable (session_id)');
+        await db.execute(
+            'CREATE INDEX idx_waypoints_timestamp ON $_waypointsTable (timestamp)');
+        await db.execute(
+            'CREATE INDEX idx_waypoints_type ON $_waypointsTable (type)');
 
         // Add index for standalone waypoints (where session_id is NULL)
-        await db.execute('CREATE INDEX idx_waypoints_standalone ON $_waypointsTable (session_id) WHERE session_id IS NULL');
+        await db.execute(
+            'CREATE INDEX idx_waypoints_standalone ON $_waypointsTable (session_id) WHERE session_id IS NULL');
 
         // Add index for category
-        await db.execute('CREATE INDEX idx_waypoints_category ON $_waypointsTable (category)');
+        await db.execute(
+            'CREATE INDEX idx_waypoints_category ON $_waypointsTable (category)');
 
-        debugPrint('✅ Successfully migrated waypoints table for standalone support');
+        debugPrint(
+            '✅ Successfully migrated waypoints table for standalone support');
       }
 
       // Version 8 -> 9: Add session_id column to custom_markers table
       if (oldVersion < 9) {
         debugPrint('📍 Adding session_id column to custom_markers table...');
 
-        await _addColumnIfNotExists(db, _customMarkersTable, 'session_id', 'TEXT');
+        await _addColumnIfNotExists(
+            db, _customMarkersTable, 'session_id', 'TEXT');
 
         // Create index for session-based queries
         await db.execute(
-          'CREATE INDEX IF NOT EXISTS idx_custom_markers_session_id ON $_customMarkersTable (session_id)'
-        );
+            'CREATE INDEX IF NOT EXISTS idx_custom_markers_session_id ON $_customMarkersTable (session_id)');
 
-        debugPrint('✅ Successfully added session_id column to custom_markers table');
+        debugPrint(
+            '✅ Successfully added session_id column to custom_markers table');
       }
 
       // Version 9 -> 10: Migrate photo_waypoints to custom_markers + marker_attachments
@@ -1588,7 +1652,8 @@ class DatabaseService {
           INNER JOIN $_waypointsTable w ON pw.waypoint_id = w.id
         ''');
 
-        debugPrint('📸 Found ${photoWaypoints.length} photo waypoints to migrate');
+        debugPrint(
+            '📸 Found ${photoWaypoints.length} photo waypoints to migrate');
 
         int migratedCount = 0;
         for (final photoData in photoWaypoints) {
@@ -1599,7 +1664,8 @@ class DatabaseService {
             final String? sessionId = photoData['session_id'] as String?;
             final int createdAt = photoData['created_at'] as int;
             final String? waypointName = photoData['waypoint_name'] as String?;
-            final String? waypointNotes = photoData['waypoint_notes'] as String?;
+            final String? waypointNotes =
+                photoData['waypoint_notes'] as String?;
 
             // Create custom marker with 'photo' category
             // Use the photo's ID as the marker ID to maintain uniqueness
@@ -1640,41 +1706,56 @@ class DatabaseService {
 
             migratedCount++;
           } catch (e) {
-            debugPrint('⚠️ Failed to migrate photo waypoint ${photoData['photo_id']}: $e');
+            debugPrint(
+                '⚠️ Failed to migrate photo waypoint ${photoData['photo_id']}: $e');
             // Continue with other photos
           }
         }
 
-        debugPrint('✅ Successfully migrated $migratedCount photo waypoints to custom markers');
+        debugPrint(
+            '✅ Successfully migrated $migratedCount photo waypoints to custom markers');
       }
 
       // Version 10 -> 11: Add user_rotation column to marker_attachments table
       if (oldVersion < 11) {
-        debugPrint('🔄 Adding user_rotation column to marker_attachments table...');
-        await _addColumnIfNotExists(db, _markerAttachmentsTable, 'user_rotation', 'INTEGER');
-        debugPrint('✅ Successfully added user_rotation column to marker_attachments table');
+        debugPrint(
+            '🔄 Adding user_rotation column to marker_attachments table...');
+        await _addColumnIfNotExists(
+            db, _markerAttachmentsTable, 'user_rotation', 'INTEGER');
+        debugPrint(
+            '✅ Successfully added user_rotation column to marker_attachments table');
       }
 
       // Version 11 -> 12: Add device orientation columns to marker_attachments
       // AND ensure all photo_waypoints are migrated to custom_markers (in case v10 was skipped)
       if (oldVersion < 12) {
-        debugPrint('📸 V12 Migration: Adding device orientation columns and ensuring photo_waypoints are migrated...');
+        debugPrint(
+            '📸 V12 Migration: Adding device orientation columns and ensuring photo_waypoints are migrated...');
 
         // Add new columns for device orientation data (safely, in case they already exist)
-        await _addColumnIfNotExists(db, _markerAttachmentsTable, 'width', 'INTEGER');
-        await _addColumnIfNotExists(db, _markerAttachmentsTable, 'height', 'INTEGER');
-        await _addColumnIfNotExists(db, _markerAttachmentsTable, 'device_pitch', 'REAL');
-        await _addColumnIfNotExists(db, _markerAttachmentsTable, 'device_roll', 'REAL');
-        await _addColumnIfNotExists(db, _markerAttachmentsTable, 'device_yaw', 'REAL');
-        await _addColumnIfNotExists(db, _markerAttachmentsTable, 'photo_orientation', 'TEXT');
-        await _addColumnIfNotExists(db, _markerAttachmentsTable, 'camera_tilt_angle', 'REAL');
-        await _addColumnIfNotExists(db, _markerAttachmentsTable, 'source', 'TEXT');
+        await _addColumnIfNotExists(
+            db, _markerAttachmentsTable, 'width', 'INTEGER');
+        await _addColumnIfNotExists(
+            db, _markerAttachmentsTable, 'height', 'INTEGER');
+        await _addColumnIfNotExists(
+            db, _markerAttachmentsTable, 'device_pitch', 'REAL');
+        await _addColumnIfNotExists(
+            db, _markerAttachmentsTable, 'device_roll', 'REAL');
+        await _addColumnIfNotExists(
+            db, _markerAttachmentsTable, 'device_yaw', 'REAL');
+        await _addColumnIfNotExists(
+            db, _markerAttachmentsTable, 'photo_orientation', 'TEXT');
+        await _addColumnIfNotExists(
+            db, _markerAttachmentsTable, 'camera_tilt_angle', 'REAL');
+        await _addColumnIfNotExists(
+            db, _markerAttachmentsTable, 'source', 'TEXT');
 
         // CRITICAL: Check for unmigrated photo_waypoints (v10 migration may have been skipped)
         // Query all photo_waypoints that DON'T have a corresponding custom_marker
         debugPrint('📸 Checking for unmigrated photo_waypoints...');
 
-        final List<Map<String, dynamic>> unmigratedPhotos = await db.rawQuery('''
+        final List<Map<String, dynamic>> unmigratedPhotos =
+            await db.rawQuery('''
           SELECT
             pw.id as photo_id,
             pw.waypoint_id,
@@ -1702,7 +1783,8 @@ class DatabaseService {
           )
         ''');
 
-        debugPrint('📸 Found ${unmigratedPhotos.length} unmigrated photo_waypoints');
+        debugPrint(
+            '📸 Found ${unmigratedPhotos.length} unmigrated photo_waypoints');
 
         int migratedCount = 0;
         for (final photoData in unmigratedPhotos) {
@@ -1713,7 +1795,8 @@ class DatabaseService {
             final String? sessionId = photoData['session_id'] as String?;
             final int createdAt = photoData['created_at'] as int;
             final String? waypointName = photoData['waypoint_name'] as String?;
-            final String? waypointNotes = photoData['waypoint_notes'] as String?;
+            final String? waypointNotes =
+                photoData['waypoint_notes'] as String?;
 
             // Create custom marker with 'photo' category
             await db.insert(
@@ -1761,19 +1844,23 @@ class DatabaseService {
 
             migratedCount++;
           } catch (e) {
-            debugPrint('⚠️ Failed to migrate photo waypoint ${photoData['photo_id']}: $e');
+            debugPrint(
+                '⚠️ Failed to migrate photo waypoint ${photoData['photo_id']}: $e');
           }
         }
 
         if (migratedCount > 0) {
-          debugPrint('✅ Successfully migrated $migratedCount previously unmigrated photo_waypoints');
+          debugPrint(
+              '✅ Successfully migrated $migratedCount previously unmigrated photo_waypoints');
         }
 
         // Also backfill device orientation data for any photos that were migrated by v10
         // but didn't get the new orientation columns
-        debugPrint('📸 Backfilling device orientation data for previously migrated photos...');
+        debugPrint(
+            '📸 Backfilling device orientation data for previously migrated photos...');
 
-        final List<Map<String, dynamic>> allPhotoWaypoints = await db.rawQuery('''
+        final List<Map<String, dynamic>> allPhotoWaypoints =
+            await db.rawQuery('''
           SELECT
             id,
             width,
@@ -1812,15 +1899,18 @@ class DatabaseService {
           }
         }
 
-        debugPrint('✅ V12 Migration complete: $migratedCount new migrations, $backfilledCount backfills');
+        debugPrint(
+            '✅ V12 Migration complete: $migratedCount new migrations, $backfilledCount backfills');
       }
 
       // Version 12 -> 13: Ensure ALL photo_waypoints are migrated (for users who were already at v12)
       if (oldVersion == 12) {
-        debugPrint('📸 V13 Migration: Ensuring all photo_waypoints are migrated...');
+        debugPrint(
+            '📸 V13 Migration: Ensuring all photo_waypoints are migrated...');
 
         // Query all photo_waypoints that DON'T have a corresponding custom_marker
-        final List<Map<String, dynamic>> unmigratedPhotos = await db.rawQuery('''
+        final List<Map<String, dynamic>> unmigratedPhotos =
+            await db.rawQuery('''
           SELECT
             pw.id as photo_id,
             pw.waypoint_id,
@@ -1848,7 +1938,8 @@ class DatabaseService {
           )
         ''');
 
-        debugPrint('📸 Found ${unmigratedPhotos.length} unmigrated photo_waypoints');
+        debugPrint(
+            '📸 Found ${unmigratedPhotos.length} unmigrated photo_waypoints');
 
         int migratedCount = 0;
         for (final photoData in unmigratedPhotos) {
@@ -1859,7 +1950,8 @@ class DatabaseService {
             final String? sessionId = photoData['session_id'] as String?;
             final int createdAt = photoData['created_at'] as int;
             final String? waypointName = photoData['waypoint_name'] as String?;
-            final String? waypointNotes = photoData['waypoint_notes'] as String?;
+            final String? waypointNotes =
+                photoData['waypoint_notes'] as String?;
 
             // Create custom marker with 'photo' category
             await db.insert(
@@ -1907,16 +1999,19 @@ class DatabaseService {
 
             migratedCount++;
           } catch (e) {
-            debugPrint('⚠️ Failed to migrate photo waypoint ${photoData['photo_id']}: $e');
+            debugPrint(
+                '⚠️ Failed to migrate photo waypoint ${photoData['photo_id']}: $e');
           }
         }
 
-        debugPrint('✅ V13 Migration complete: migrated $migratedCount photo_waypoints');
+        debugPrint(
+            '✅ V13 Migration complete: migrated $migratedCount photo_waypoints');
       }
 
       // Version 13 -> 14: Add achievement and statistics tables
       if (oldVersion < 14) {
-        debugPrint('🏆 V14 Migration: Adding achievement and statistics tables...');
+        debugPrint(
+            '🏆 V14 Migration: Adding achievement and statistics tables...');
 
         // Create achievements table
         await db.execute('''
@@ -1998,11 +2093,16 @@ class DatabaseService {
         ''');
 
         // Create indexes
-        await db.execute('CREATE INDEX IF NOT EXISTS idx_achievements_category ON $_achievementsTable (category)');
-        await db.execute('CREATE INDEX IF NOT EXISTS idx_user_achievements_status ON $_userAchievementsTable (status)');
-        await db.execute('CREATE INDEX IF NOT EXISTS idx_user_achievements_achievement_id ON $_userAchievementsTable (achievement_id)');
-        await db.execute('CREATE INDEX IF NOT EXISTS idx_explored_states_code ON $_exploredStatesTable (state_code)');
-        await db.execute('CREATE INDEX IF NOT EXISTS idx_session_streaks_date ON $_sessionStreaksTable (date)');
+        await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_achievements_category ON $_achievementsTable (category)');
+        await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_user_achievements_status ON $_userAchievementsTable (status)');
+        await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_user_achievements_achievement_id ON $_userAchievementsTable (achievement_id)');
+        await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_explored_states_code ON $_exploredStatesTable (state_code)');
+        await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_session_streaks_date ON $_sessionStreaksTable (date)');
 
         // Initialize lifetime statistics with a single row (will be populated by service)
         await db.execute('''
@@ -2010,7 +2110,8 @@ class DatabaseService {
           VALUES (1, ${DateTime.now().millisecondsSinceEpoch})
         ''');
 
-        debugPrint('✅ V14 Migration complete: achievement and statistics tables created');
+        debugPrint(
+            '✅ V14 Migration complete: achievement and statistics tables created');
       }
 
       // Version 14 -> 15: Add journal entries table
@@ -2043,12 +2144,32 @@ class DatabaseService {
         ''');
 
         // Create indexes
-        await db.execute('CREATE INDEX IF NOT EXISTS idx_journal_entries_session ON $_journalEntriesTable (session_id)');
-        await db.execute('CREATE INDEX IF NOT EXISTS idx_journal_entries_hunt ON $_journalEntriesTable (hunt_id)');
-        await db.execute('CREATE INDEX IF NOT EXISTS idx_journal_entries_timestamp ON $_journalEntriesTable (timestamp DESC)');
-        await db.execute('CREATE INDEX IF NOT EXISTS idx_journal_entries_type ON $_journalEntriesTable (entry_type)');
+        await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_journal_entries_session ON $_journalEntriesTable (session_id)');
+        await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_journal_entries_hunt ON $_journalEntriesTable (hunt_id)');
+        await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_journal_entries_timestamp ON $_journalEntriesTable (timestamp DESC)');
+        await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_journal_entries_type ON $_journalEntriesTable (entry_type)');
 
         debugPrint('✅ V15 Migration complete: journal entries table created');
+      }
+
+      if (oldVersion < 16) {
+        debugPrint('🧭 V16: Adding custom north references table...');
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS $_customNorthReferencesTable (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            latitude REAL NOT NULL,
+            longitude REAL NOT NULL,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER
+          )
+        ''');
+        debugPrint(
+            '✅ V16 Migration complete: custom north references table created');
       }
 
       debugPrint('✅ Database upgrade completed successfully');
@@ -2887,8 +3008,7 @@ class DatabaseService {
         orderBy: 'sequence_number ASC',
       );
 
-      final points =
-          pointResults.map(RoutePoint.fromDatabase).toList();
+      final points = pointResults.map(RoutePoint.fromDatabase).toList();
 
       // Get route waypoints
       final List<Map<String, dynamic>> waypointResults = await db.query(
@@ -2897,9 +3017,8 @@ class DatabaseService {
         whereArgs: [routeId],
       );
 
-      final waypoints = waypointResults
-          .map(RouteWaypoint.fromDatabase)
-          .toList();
+      final waypoints =
+          waypointResults.map(RouteWaypoint.fromDatabase).toList();
 
       return route.copyWith(
         points: points,
@@ -3077,7 +3196,7 @@ class DatabaseService {
     }
   }
 
-    /// Waypoint Template Operations
+  /// Waypoint Template Operations
 
   /// Insert a waypoint template
   Future<void> insertWaypointTemplate(WaypointTemplate template) async {
@@ -3120,7 +3239,7 @@ class DatabaseService {
     try {
       final Database db = await database;
       final List<Map<String, dynamic>> results;
-      
+
       if (userId != null) {
         results = await db.query(
           _waypointTemplatesTable,
@@ -3192,8 +3311,9 @@ class DatabaseService {
   }) async {
     try {
       final Database db = await database;
-      final String relationshipId = DateTime.now().millisecondsSinceEpoch.toString();
-      
+      final String relationshipId =
+          DateTime.now().millisecondsSinceEpoch.toString();
+
       await db.insert(
         _waypointRelationshipsTable,
         {
@@ -3214,7 +3334,8 @@ class DatabaseService {
   }
 
   /// Get waypoint relationships
-  Future<List<Map<String, dynamic>>> getWaypointRelationships(String waypointId) async {
+  Future<List<Map<String, dynamic>>> getWaypointRelationships(
+      String waypointId) async {
     try {
       final Database db = await database;
       final List<Map<String, dynamic>> results = await db.query(
@@ -3246,7 +3367,7 @@ class DatabaseService {
     try {
       final Database db = await database;
       final String clusterId = DateTime.now().millisecondsSinceEpoch.toString();
-      
+
       await db.insert(
         _waypointClustersTable,
         {
@@ -3282,7 +3403,7 @@ class DatabaseService {
     try {
       final Database db = await database;
       final String historyId = DateTime.now().millisecondsSinceEpoch.toString();
-      
+
       await db.insert(
         _waypointHistoryTable,
         {
@@ -3312,8 +3433,9 @@ class DatabaseService {
   }) async {
     try {
       final Database db = await database;
-      final String snapshotId = DateTime.now().millisecondsSinceEpoch.toString();
-      
+      final String snapshotId =
+          DateTime.now().millisecondsSinceEpoch.toString();
+
       await db.insert(
         _waypointSnapshotsTable,
         {
@@ -3332,7 +3454,7 @@ class DatabaseService {
     }
   }
 
-/// Clear all data (for testing or factory reset)
+  /// Clear all data (for testing or factory reset)
   Future<void> clearAllData() async {
     try {
       final Database db = await database;
@@ -3487,7 +3609,8 @@ class DatabaseService {
     try {
       final Database db = await database;
       final map = hunt.toDatabaseMap();
-      debugPrint('DB updateTreasureHunt: "${hunt.name}" coverImagePath=${map['cover_image_path']}');
+      debugPrint(
+          'DB updateTreasureHunt: "${hunt.name}" coverImagePath=${map['cover_image_path']}');
       final int count = await db.update(
         _treasureHuntsTable,
         map,
@@ -3547,7 +3670,8 @@ class DatabaseService {
       final hunts = results.map(TreasureHunt.fromDatabaseMap).toList();
       // Debug: Log what we're returning from DB
       for (final hunt in hunts) {
-        debugPrint('DB getAllTreasureHunts: "${hunt.name}" coverImagePath=${hunt.coverImagePath}');
+        debugPrint(
+            'DB getAllTreasureHunts: "${hunt.name}" coverImagePath=${hunt.coverImagePath}');
       }
       return hunts;
     } catch (e) {
@@ -3639,7 +3763,8 @@ class DatabaseService {
   }
 
   /// Get all documents for a hunt
-  Future<List<HuntDocument>> getHuntDocuments(String huntId, {HuntDocumentType? type}) async {
+  Future<List<HuntDocument>> getHuntDocuments(String huntId,
+      {HuntDocumentType? type}) async {
     try {
       final Database db = await database;
       final List<Map<String, dynamic>> results;
@@ -3796,7 +3921,8 @@ class DatabaseService {
   }
 
   /// Get all locations for a hunt
-  Future<List<HuntLocation>> getHuntLocations(String huntId, {HuntLocationStatus? status}) async {
+  Future<List<HuntLocation>> getHuntLocations(String huntId,
+      {HuntLocationStatus? status}) async {
     try {
       final Database db = await database;
       final List<Map<String, dynamic>> results;
@@ -3847,40 +3973,50 @@ class DatabaseService {
 
       // Count only actual documents (images, PDFs, documents) - not notes or links
       final documentCount = Sqflite.firstIntValue(
-        await db.rawQuery(
-          'SELECT COUNT(*) FROM $_huntDocumentsTable WHERE hunt_id = ? AND type IN (?, ?, ?)',
-          [huntId, HuntDocumentType.image.name, HuntDocumentType.pdf.name, HuntDocumentType.document.name],
-        ),
-      ) ?? 0;
+            await db.rawQuery(
+              'SELECT COUNT(*) FROM $_huntDocumentsTable WHERE hunt_id = ? AND type IN (?, ?, ?)',
+              [
+                huntId,
+                HuntDocumentType.image.name,
+                HuntDocumentType.pdf.name,
+                HuntDocumentType.document.name
+              ],
+            ),
+          ) ??
+          0;
 
       final noteCount = Sqflite.firstIntValue(
-        await db.rawQuery(
-          'SELECT COUNT(*) FROM $_huntDocumentsTable WHERE hunt_id = ? AND type = ?',
-          [huntId, HuntDocumentType.note.name],
-        ),
-      ) ?? 0;
+            await db.rawQuery(
+              'SELECT COUNT(*) FROM $_huntDocumentsTable WHERE hunt_id = ? AND type = ?',
+              [huntId, HuntDocumentType.note.name],
+            ),
+          ) ??
+          0;
 
       final linkCount = Sqflite.firstIntValue(
-        await db.rawQuery(
-          'SELECT COUNT(*) FROM $_huntDocumentsTable WHERE hunt_id = ? AND type = ?',
-          [huntId, HuntDocumentType.link.name],
-        ),
-      ) ?? 0;
+            await db.rawQuery(
+              'SELECT COUNT(*) FROM $_huntDocumentsTable WHERE hunt_id = ? AND type = ?',
+              [huntId, HuntDocumentType.link.name],
+            ),
+          ) ??
+          0;
 
       // Count sessions directly associated with this hunt (via session.huntId)
       final sessionCount = Sqflite.firstIntValue(
-        await db.rawQuery(
-          'SELECT COUNT(*) FROM $_sessionsTable WHERE hunt_id = ?',
-          [huntId],
-        ),
-      ) ?? 0;
+            await db.rawQuery(
+              'SELECT COUNT(*) FROM $_sessionsTable WHERE hunt_id = ?',
+              [huntId],
+            ),
+          ) ??
+          0;
 
       final locationCount = Sqflite.firstIntValue(
-        await db.rawQuery(
-          'SELECT COUNT(*) FROM $_huntLocationsTable WHERE hunt_id = ?',
-          [huntId],
-        ),
-      ) ?? 0;
+            await db.rawQuery(
+              'SELECT COUNT(*) FROM $_huntLocationsTable WHERE hunt_id = ?',
+              [huntId],
+            ),
+          ) ??
+          0;
 
       return {
         'documents': documentCount,
@@ -4018,7 +4154,8 @@ class DatabaseService {
   }
 
   /// Get journal entries for a specific session
-  Future<List<JournalEntry>> getJournalEntriesForSession(String sessionId) async {
+  Future<List<JournalEntry>> getJournalEntriesForSession(
+      String sessionId) async {
     return getJournalEntries(sessionId: sessionId);
   }
 
@@ -4175,7 +4312,8 @@ class DatabaseService {
     try {
       final Database db = await database;
 
-      var whereClause = 'latitude <= ? AND latitude >= ? AND longitude <= ? AND longitude >= ?';
+      var whereClause =
+          'latitude <= ? AND latitude >= ? AND longitude <= ? AND longitude >= ?';
       final whereArgs = <dynamic>[north, south, east, west];
 
       if (categoryFilter != null && categoryFilter.isNotEmpty) {
@@ -4216,7 +4354,8 @@ class DatabaseService {
   }
 
   /// Get custom markers linked to a specific tracking session
-  Future<List<CustomMarker>> getCustomMarkersForSession(String sessionId) async {
+  Future<List<CustomMarker>> getCustomMarkersForSession(
+      String sessionId) async {
     try {
       final Database db = await database;
       debugPrint('🔍 Querying custom markers for session: $sessionId');
@@ -4226,9 +4365,11 @@ class DatabaseService {
         whereArgs: [sessionId],
         orderBy: 'created_at ASC',
       );
-      debugPrint('🔍 Found ${results.length} custom markers for session $sessionId');
+      debugPrint(
+          '🔍 Found ${results.length} custom markers for session $sessionId');
       for (final r in results) {
-        debugPrint('   📌 Marker: ${r['id']} - ${r['name']} (session_id: ${r['session_id']})');
+        debugPrint(
+            '   📌 Marker: ${r['id']} - ${r['name']} (session_id: ${r['session_id']})');
       }
       return results.map(CustomMarker.fromDatabaseMap).toList();
     } catch (e) {
@@ -4341,7 +4482,8 @@ class DatabaseService {
   }
 
   /// Get all attachments for a custom marker
-  Future<List<MarkerAttachment>> getAttachmentsForMarker(String markerId) async {
+  Future<List<MarkerAttachment>> getAttachmentsForMarker(
+      String markerId) async {
     try {
       final Database db = await database;
       debugPrint('📎 Querying attachments for marker_id: $markerId');
@@ -4353,7 +4495,8 @@ class DatabaseService {
       );
       debugPrint('📎 Found ${results.length} attachments for marker $markerId');
       for (final r in results) {
-        debugPrint('📎   Attachment: ${r['id']} type=${r['type']} file_path=${r['file_path']}');
+        debugPrint(
+            '📎   Attachment: ${r['id']} type=${r['type']} file_path=${r['file_path']}');
       }
       return results.map(MarkerAttachment.fromDatabaseMap).toList();
     } catch (e) {
@@ -4606,7 +4749,8 @@ class DatabaseService {
   }
 
   /// Insert or update user achievement progress
-  Future<void> upsertUserAchievement(Map<String, dynamic> userAchievement) async {
+  Future<void> upsertUserAchievement(
+      Map<String, dynamic> userAchievement) async {
     try {
       final Database db = await database;
       await db.insert(
@@ -4645,6 +4789,54 @@ class DatabaseService {
       return Sqflite.firstIntValue(result) ?? 0;
     } catch (e) {
       debugPrint('Error getting explored states count: $e');
+      rethrow;
+    }
+  }
+
+  /// Custom North Reference Operations
+
+  /// Get all saved custom North references.
+  Future<List<CustomNorthReference>> getCustomNorthReferences() async {
+    try {
+      final Database db = await database;
+      final List<Map<String, dynamic>> maps = await db
+          .query(_customNorthReferencesTable, orderBy: 'created_at DESC');
+      return maps.map((map) => CustomNorthReference.fromMap(map)).toList();
+    } catch (e) {
+      debugPrint('Error getting custom north references: $e');
+      rethrow;
+    }
+  }
+
+  /// Insert a new custom North reference.
+  Future<void> insertCustomNorthReference(
+      CustomNorthReference reference) async {
+    try {
+      final Database db = await database;
+      await db.insert(
+        _customNorthReferencesTable,
+        reference.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+      debugPrint('Inserted custom north reference: ${reference.name}');
+    } catch (e) {
+      debugPrint('Error inserting custom north reference: $e');
+      rethrow;
+    }
+  }
+
+  /// Delete a custom North reference by ID.
+  Future<void> deleteCustomNorthReference(String id) async {
+    try {
+      final Database db = await database;
+      await db.delete(
+        _customNorthReferencesTable,
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+      debugPrint('Deleted custom north reference: $id');
+    } catch (e) {
+      debugPrint('Error deleting custom north reference: $e');
       rethrow;
     }
   }
