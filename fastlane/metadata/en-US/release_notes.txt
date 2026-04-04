@@ -1,9 +1,14 @@
-Obsession Tracker is now open source! Verify our privacy claims yourself at github.com/Obsession-Community/obsession-tracker
+What's new in v2.3.0:
 
-What's new in v2.2.0:
-- Updated all dependencies for improved stability and security
-- Enhanced subscription management and receipt validation
-- Improved background location tracking notifications
-- Bug fixes and performance improvements
+New: Full-Page Compass Tool
+- Beautiful full-screen compass accessible from Your Journey menu
+- Real-time magnetic heading with smooth animated compass rose
+- Bearing display in degrees with cardinal direction
+
+New: Custom North Reference (Polaris Mode)
+- Set any GPS coordinate as your "North" reference point
+- Name and save multiple custom references for different hunts
+- Real-time bearing and distance to your custom North target
+- Perfect for treasure hunts that use landmark-based navigation
 
 Your data stays on your device. We don't track where you explore.

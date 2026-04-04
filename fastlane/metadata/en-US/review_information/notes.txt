@@ -19,6 +19,7 @@ FREE FEATURES (available without subscription):
 • GPS tracking with breadcrumb trail
 • Waypoint creation (finds, search sites, targets)
 • Photo capture with GPS coordinates
+• Full-page compass with custom North reference points
 • Session playback
 • GPX/KML export
 
