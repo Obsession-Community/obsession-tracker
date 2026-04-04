@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Full-Page Compass with Custom North Reference
+
+- **Full-page compass tool** accessible from the "Your Journey" section
+  - Large compass rose display with real-time magnetic heading
+  - Bearing and distance to custom North reference points
+- **Custom North reference system** for treasure hunters and explorers
+  - Save named GPS coordinates as custom North reference points
+  - Switch between magnetic North and any saved reference
+  - Real-time bearing and distance calculations using Haversine formula
+- **Database schema v16** with `custom_north_references` table
+
 ### Added - Meta Ray-Ban Smart Glasses Integration (2025-12-06) [EXPERIMENTAL]
 
 - **Quick-capture photo workflow** with Meta Ray-Ban smart glasses (requires Meta AI app)
