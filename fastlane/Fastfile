@@ -935,7 +935,7 @@ platform :mac do
       dart_defines << "--dart-define=NPS_API_KEY=#{ENV['NPS_API_KEY']}" if ENV['NPS_API_KEY']
       dart_defines << "--dart-define=IOS_ANNUAL_PRODUCT_ID=#{ENV['IOS_ANNUAL_PRODUCT_ID']}" if ENV['IOS_ANNUAL_PRODUCT_ID']
       dart_defines << "--dart-define=IOS_MONTHLY_PRODUCT_ID=#{ENV['IOS_MONTHLY_PRODUCT_ID']}" if ENV['IOS_MONTHLY_PRODUCT_ID']
-      sh("flutter", "build", "macos", "--release", *dart_defines)
+      sh("flutter", "build", "macos", "--release", "--build-number=#{build_number}", *dart_defines)
     end
 
     # Set up code signing with App Store Connect API (if configured)
@@ -997,13 +997,29 @@ platform :mac do
       export_plist_path = "build/macos/ExportOptions.plist"
       File.write(export_plist_path, export_options.to_plist)
 
-      sh(
+      # Build xcodebuild export command with API key auth
+      export_cmd = [
         "xcodebuild",
         "-exportArchive",
         "-archivePath", archive_path,
         "-exportOptionsPlist", export_plist_path,
         "-allowProvisioningUpdates"
-      )
+      ]
+
+      # Add API key authentication for upload
+      if ENV["APP_STORE_CONNECT_API_KEY_ID"]
+        key_path = File.expand_path(
+          ENV["APP_STORE_CONNECT_API_KEY_PATH"] ||
+          "fastlane/AuthKey_#{ENV['APP_STORE_CONNECT_API_KEY_ID']}.p8"
+        )
+        export_cmd += [
+          "-authenticationKeyPath", key_path,
+          "-authenticationKeyID", ENV["APP_STORE_CONNECT_API_KEY_ID"],
+          "-authenticationKeyIssuerID", ENV["APP_STORE_CONNECT_API_ISSUER_ID"]
+        ]
+      end
+
+      sh(*export_cmd)
     end
 
     UI.success("✅ macOS build uploaded to TestFlight!")
