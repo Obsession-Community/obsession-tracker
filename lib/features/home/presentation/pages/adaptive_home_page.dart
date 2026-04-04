@@ -10,6 +10,7 @@ import 'package:obsession_tracker/core/services/platform_service.dart';
 import 'package:obsession_tracker/core/utils/responsive_utils.dart';
 import 'package:obsession_tracker/core/widgets/adaptive_layout.dart';
 import 'package:obsession_tracker/features/achievements/presentation/pages/achievements_page.dart';
+import 'package:obsession_tracker/features/compass/presentation/pages/compass_full_page.dart';
 import 'package:obsession_tracker/features/hunts/presentation/pages/hunts_page.dart';
 import 'package:obsession_tracker/features/journal/presentation/pages/journal_list_page.dart';
 import 'package:obsession_tracker/features/map/presentation/pages/map_page.dart';
@@ -49,7 +50,8 @@ class _AdaptiveHomePageState extends ConsumerState<AdaptiveHomePage> {
     super.initState();
     // Listen to navigation service for programmatic tab changes
     _navigationService.selectedTabIndex.addListener(_onTabChangeRequested);
-    debugPrint('📱 AdaptiveHomePage: Initialized, listening to NavigationService');
+    debugPrint(
+        '📱 AdaptiveHomePage: Initialized, listening to NavigationService');
 
     // Check for legal updates after first frame
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -66,11 +68,13 @@ class _AdaptiveHomePageState extends ConsumerState<AdaptiveHomePage> {
   }
 
   void _onTabChangeRequested() {
-    debugPrint('🔔 AdaptiveHomePage: Tab change requested to ${_navigationService.selectedTabIndex.value}');
+    debugPrint(
+        '🔔 AdaptiveHomePage: Tab change requested to ${_navigationService.selectedTabIndex.value}');
     if (mounted) {
       setState(() {
         _selectedIndex = _navigationService.selectedTabIndex.value;
-        debugPrint('✅ AdaptiveHomePage: Updated _selectedIndex to $_selectedIndex');
+        debugPrint(
+            '✅ AdaptiveHomePage: Updated _selectedIndex to $_selectedIndex');
       });
     } else {
       debugPrint('⚠️ AdaptiveHomePage: Not mounted, cannot update tab');
@@ -84,7 +88,8 @@ class _AdaptiveHomePageState extends ConsumerState<AdaptiveHomePage> {
     // Show badge if there are unread announcements OR data updates
     final showMoreBadge = unreadAnnouncementsCount > 0 || hasDataUpdates;
     // If we have announcements, show the count; otherwise just show a dot for updates
-    final badgeLabel = unreadAnnouncementsCount > 0 ? '$unreadAnnouncementsCount' : '';
+    final badgeLabel =
+        unreadAnnouncementsCount > 0 ? '$unreadAnnouncementsCount' : '';
 
     return [
       const NavigationDestination(
@@ -158,7 +163,8 @@ class _AdaptiveHomePageState extends ConsumerState<AdaptiveHomePage> {
   }
 
   /// Phone layout with bottom navigation
-  Widget _buildPhoneLayout(List<NavigationDestination> destinations) => Scaffold(
+  Widget _buildPhoneLayout(List<NavigationDestination> destinations) =>
+      Scaffold(
         body: _buildCurrentPage(),
         bottomNavigationBar: NavigationBar(
           selectedIndex: _selectedIndex,
@@ -183,11 +189,12 @@ class _AdaptiveHomePageState extends ConsumerState<AdaptiveHomePage> {
               leading: _buildNavigationRailHeader(),
               trailing: _buildNavigationRailTrailing(),
               destinations: destinations
-                  .map((NavigationDestination dest) => NavigationRailDestination(
-                        icon: dest.icon,
-                        selectedIcon: dest.selectedIcon,
-                        label: Text(dest.label),
-                      ))
+                  .map(
+                      (NavigationDestination dest) => NavigationRailDestination(
+                            icon: dest.icon,
+                            selectedIcon: dest.selectedIcon,
+                            label: Text(dest.label),
+                          ))
                   .toList(),
             ),
 
@@ -203,7 +210,8 @@ class _AdaptiveHomePageState extends ConsumerState<AdaptiveHomePage> {
   }
 
   /// Desktop layout with persistent navigation rail
-  Widget _buildDesktopLayout(List<NavigationDestination> destinations) => Scaffold(
+  Widget _buildDesktopLayout(List<NavigationDestination> destinations) =>
+      Scaffold(
         body: Row(
           children: [
             // Extended navigation rail
@@ -214,11 +222,12 @@ class _AdaptiveHomePageState extends ConsumerState<AdaptiveHomePage> {
               leading: _buildNavigationRailHeader(),
               trailing: _buildNavigationRailTrailing(),
               destinations: destinations
-                  .map((NavigationDestination dest) => NavigationRailDestination(
-                        icon: dest.icon,
-                        selectedIcon: dest.selectedIcon,
-                        label: Text(dest.label),
-                      ))
+                  .map(
+                      (NavigationDestination dest) => NavigationRailDestination(
+                            icon: dest.icon,
+                            selectedIcon: dest.selectedIcon,
+                            label: Text(dest.label),
+                          ))
                   .toList(),
             ),
 
@@ -302,7 +311,8 @@ class _AdaptiveHomePageState extends ConsumerState<AdaptiveHomePage> {
             title: const Text('Announcements'),
             subtitle: const Text('View all announcements and updates'),
             trailing: const Icon(Icons.chevron_right),
-            onTap: () => _navigateToPage(context, const AnnouncementsHistoryPage()),
+            onTap: () =>
+                _navigateToPage(context, const AnnouncementsHistoryPage()),
           ),
           const Divider(),
 
@@ -316,7 +326,8 @@ class _AdaptiveHomePageState extends ConsumerState<AdaptiveHomePage> {
                 child: const Icon(Icons.layers),
               ),
               title: const Text('Map Data'),
-              subtitle: const Text('Land ownership, trails, and historical places'),
+              subtitle:
+                  const Text('Land ownership, trails, and historical places'),
               trailing: const Icon(Icons.chevron_right),
               onTap: () => _navigateToPage(context, const LandTrailDataPage()),
             )
@@ -341,6 +352,13 @@ class _AdaptiveHomePageState extends ConsumerState<AdaptiveHomePage> {
             onTap: () => _navigateToPage(context, const AchievementsPage()),
           ),
           ListTile(
+            leading: const Icon(Icons.explore),
+            title: const Text('Compass'),
+            subtitle: const Text('Full-page compass with custom North'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => _navigateToPage(context, const CompassFullPage()),
+          ),
+          ListTile(
             leading: const Icon(Icons.wb_twilight),
             title: const Text('Sun & Moon'),
             subtitle: const Text('Sunrise, sunset, moon phase, golden hour'),
@@ -352,7 +370,8 @@ class _AdaptiveHomePageState extends ConsumerState<AdaptiveHomePage> {
           // Settings Section
           _buildSectionHeader(context, 'Settings'),
           // Only show subscription management for premium users
-          if (ref.watch(isPremiumProvider)) _buildSubscriptionTile(context, ref),
+          if (ref.watch(isPremiumProvider))
+            _buildSubscriptionTile(context, ref),
           ListTile(
             leading: const Icon(Icons.security),
             title: const Text('Security'),
@@ -375,13 +394,13 @@ class _AdaptiveHomePageState extends ConsumerState<AdaptiveHomePage> {
             onTap: () => _navigateToPage(context, const TrackingSettingsPage()),
           ),
           if (PlatformService().isMobile)
-          ListTile(
-            leading: const Icon(Icons.camera_alt),
-            title: const Text('Camera'),
-            subtitle: const Text('Photo quality and settings'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => _navigateToPage(context, const CameraSettingsPage()),
-          ),
+            ListTile(
+              leading: const Icon(Icons.camera_alt),
+              title: const Text('Camera'),
+              subtitle: const Text('Photo quality and settings'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => _navigateToPage(context, const CameraSettingsPage()),
+            ),
           ListTile(
             leading: const Icon(Icons.backup),
             title: const Text('Data Management'),
@@ -411,7 +430,8 @@ class _AdaptiveHomePageState extends ConsumerState<AdaptiveHomePage> {
           ListTile(
             leading: const Icon(Icons.email_outlined),
             title: const Text('Contact Support'),
-            subtitle: const Text('Send feedback, report issues, or request features'),
+            subtitle:
+                const Text('Send feedback, report issues, or request features'),
             trailing: const Icon(Icons.open_in_new),
             onTap: _contactSupport,
           ),
@@ -469,7 +489,10 @@ class _AdaptiveHomePageState extends ConsumerState<AdaptiveHomePage> {
                 Icon(
                   Icons.explore,
                   size: context.isTablet ? 64 : 48,
-                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
+                  color: Theme.of(context)
+                      .colorScheme
+                      .primary
+                      .withValues(alpha: 0.5),
                 ),
                 const SizedBox(height: 16),
                 Text(
@@ -542,7 +565,8 @@ class _AdaptiveHomePageState extends ConsumerState<AdaptiveHomePage> {
           'Upgrade to Premium',
           style: TextStyle(fontWeight: FontWeight.w600),
         ),
-        subtitle: const Text('Unlock offline land data, trails, and historical places'),
+        subtitle: const Text(
+            'Unlock offline land data, trails, and historical places'),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -608,7 +632,8 @@ class _AdaptiveHomePageState extends ConsumerState<AdaptiveHomePage> {
           Icons.explore,
           size: 64,
         ),
-        applicationLegalese: '© 2025 Obsession Community LLC\nObsession Tracker\nPrivacy-first GPS tracking',
+        applicationLegalese:
+            '© 2025 Obsession Community LLC\nObsession Tracker\nPrivacy-first GPS tracking',
         children: [
           const SizedBox(height: 16),
           const Text(
@@ -693,7 +718,8 @@ class _AdaptiveHomePageState extends ConsumerState<AdaptiveHomePage> {
       } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Cannot open browser. Visit obsessiontracker.com/privacy.html'),
+            content: Text(
+                'Cannot open browser. Visit obsessiontracker.com/privacy.html'),
             backgroundColor: Colors.orange,
           ),
         );
@@ -721,7 +747,8 @@ class _AdaptiveHomePageState extends ConsumerState<AdaptiveHomePage> {
       } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Cannot open browser. Visit obsessiontracker.com/terms.html'),
+            content: Text(
+                'Cannot open browser. Visit obsessiontracker.com/terms.html'),
             backgroundColor: Colors.orange,
           ),
         );
