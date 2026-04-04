@@ -259,3 +259,4 @@ server/scripts/historical_maps_workspace/
 server/scripts/source_data/*.csv
 server/scripts/source_data/*.gz
 !server/scripts/source_data/test_cell_towers.csv
+.worktrees
