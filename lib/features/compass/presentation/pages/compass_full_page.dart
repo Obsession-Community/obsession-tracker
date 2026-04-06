@@ -19,6 +19,9 @@ class CompassFullPage extends ConsumerStatefulWidget {
 }
 
 class _CompassFullPageState extends ConsumerState<CompassFullPage> {
+  // Track cumulative turns to avoid snapping at 0/360 boundary
+  double _previousTurns = 0;
+
   @override
   void initState() {
     super.initState();
@@ -26,6 +29,17 @@ class _CompassFullPageState extends ConsumerState<CompassFullPage> {
     Future.microtask(() {
       ref.read(compassProvider.notifier).start();
     });
+  }
+
+  /// Convert a target rotation (in degrees) to cumulative turns that
+  /// always take the shortest path, avoiding the 0/360 snap.
+  double _smoothTurns(double targetDegrees) {
+    final targetTurns = targetDegrees / 360.0;
+    // Calculate the shortest delta (wrapping around ±0.5 turns)
+    var delta = targetTurns - _previousTurns;
+    delta = delta - (delta + 0.5).floorToDouble(); // normalize to [-0.5, 0.5)
+    _previousTurns += delta;
+    return _previousTurns;
   }
 
   @override
@@ -49,7 +63,10 @@ class _CompassFullPageState extends ConsumerState<CompassFullPage> {
               )
             : null;
 
-    // Rotation: magnetic mode rotates by -heading; custom mode offsets by bearing
+    // Rotation: In magnetic mode, rotate rose by -heading so N points north.
+    // In custom North mode, rotate so the N marker points toward the target.
+    // The rose must rotate by -(heading - bearingToTarget) so that when the
+    // device faces the target (heading == bearingToTarget), N points up.
     final rotationDegrees = bearingToTarget != null
         ? -(compassState.heading - bearingToTarget)
         : -compassState.heading;
@@ -90,7 +107,7 @@ class _CompassFullPageState extends ConsumerState<CompassFullPage> {
                     final roseSize = math.max(200.0, maxSize);
 
                     return AnimatedRotation(
-                      turns: rotationDegrees / 360,
+                      turns: _smoothTurns(rotationDegrees),
                       duration: const Duration(milliseconds: 300),
                       curve: Curves.easeOut,
                       child: SizedBox(
