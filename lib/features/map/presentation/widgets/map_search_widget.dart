@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:obsession_tracker/core/providers/saved_location_provider.dart';
 import 'package:obsession_tracker/core/services/map_search_service.dart';
 
 /// Callback when a search result is selected
@@ -88,6 +89,7 @@ class _MapSearchWidgetState extends ConsumerState<MapSearchWidget> {
     });
 
     try {
+      final savedLocs = ref.read(savedLocationProvider).locations;
       final results = await widget.searchService.search(
         query,
         proximityLat: widget.proximityLat,
@@ -98,6 +100,7 @@ class _MapSearchWidgetState extends ConsumerState<MapSearchWidget> {
         westBound: widget.westBound,
         limit: 8,
         searchOnlineTrails: searchOnline,
+        savedLocations: savedLocs,
       );
 
       setState(() {
@@ -370,6 +373,8 @@ class _MapSearchWidgetState extends ConsumerState<MapSearchWidget> {
                           }
 
                           final result = _searchResults[index];
+                          final isSaved = result.placeType == 'saved_location' ||
+                              ref.watch(isLocationSavedProvider(result.displayName));
                           return Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
@@ -395,6 +400,17 @@ class _MapSearchWidgetState extends ConsumerState<MapSearchWidget> {
                                             style: Theme.of(context).textTheme.bodySmall,
                                           )
                                         : null,
+                                trailing: IconButton(
+                                  icon: Icon(
+                                    isSaved ? Icons.bookmark : Icons.bookmark_border,
+                                    color: isSaved
+                                        ? Theme.of(context).colorScheme.primary
+                                        : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
+                                    size: 20,
+                                  ),
+                                  tooltip: isSaved ? 'Remove saved location' : 'Save location',
+                                  onPressed: () => _toggleSaveLocation(result, isSaved),
+                                ),
                                 onTap: () => _selectResult(result),
                               ),
                               if (index < _searchResults.length - 1)
@@ -406,6 +422,23 @@ class _MapSearchWidgetState extends ConsumerState<MapSearchWidget> {
           ),
       ],
     );
+  }
+
+  Future<void> _toggleSaveLocation(MapSearchResult result, bool isSaved) async {
+    if (isSaved) {
+      ref.read(savedLocationProvider.notifier).deleteByDisplayName(result.displayName);
+      return;
+    }
+    // Resolve coordinates first if needed
+    var resolved = result;
+    if (result.needsRetrieval) {
+      final retrieved = await widget.searchService.retrieveCoordinates(result);
+      if (retrieved == null || retrieved.latitude == null) return;
+      resolved = retrieved;
+    }
+    if (resolved.latitude != null && resolved.longitude != null) {
+      ref.read(savedLocationProvider.notifier).addFromSearchResult(resolved);
+    }
   }
 
   IconData _getIconForPlaceType(String? placeType) {
@@ -426,6 +459,8 @@ class _MapSearchWidgetState extends ConsumerState<MapSearchWidget> {
         return Icons.home;
       case 'poi':
         return Icons.place;
+      case 'saved_location':
+        return Icons.bookmark;
       default:
         return Icons.search;
     }

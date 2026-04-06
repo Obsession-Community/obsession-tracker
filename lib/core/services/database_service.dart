@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:obsession_tracker/core/models/breadcrumb.dart';
 import 'package:obsession_tracker/core/models/custom_marker.dart';
 import 'package:obsession_tracker/core/models/custom_north_reference.dart';
+import 'package:obsession_tracker/core/models/saved_location.dart';
 import 'package:obsession_tracker/core/models/imported_route.dart';
 import 'package:obsession_tracker/core/models/marker_attachment.dart';
 import 'package:obsession_tracker/core/models/session_statistics.dart';
@@ -48,7 +49,7 @@ class DatabaseService {
   Future<Database>? _initializationFuture; // Prevents concurrent initialization
   bool _isInitializing = false;
   static const String _databaseName = 'obsession_tracker.db';
-  static const int _databaseVersion = 16;
+  static const int _databaseVersion = 17;
 
   /// Tables
   static const String _sessionsTable = 'sessions';
@@ -86,6 +87,8 @@ class DatabaseService {
   static const String _journalEntriesTable = 'journal_entries';
   // Custom North references (v16)
   static const String _customNorthReferencesTable = 'custom_north_references';
+  // Saved locations (v17)
+  static const String _savedLocationsTable = 'saved_locations';
 
   /// Get the database instance, creating it if necessary
   ///
@@ -1286,6 +1289,22 @@ class DatabaseService {
         )
       ''');
 
+      // Saved locations table (v17)
+      await db.execute('''
+        CREATE TABLE $_savedLocationsTable (
+          id TEXT PRIMARY KEY,
+          display_name TEXT NOT NULL,
+          latitude REAL NOT NULL,
+          longitude REAL NOT NULL,
+          address TEXT,
+          place_type TEXT,
+          category TEXT,
+          is_favorite INTEGER NOT NULL DEFAULT 0,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER
+        )
+      ''');
+
       debugPrint('Database tables created successfully');
     } catch (e) {
       debugPrint('Error creating database tables: $e');
@@ -2170,6 +2189,25 @@ class DatabaseService {
         ''');
         debugPrint(
             '✅ V16 Migration complete: custom north references table created');
+      }
+
+      if (oldVersion < 17) {
+        debugPrint('📍 V17: Adding saved locations table...');
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS $_savedLocationsTable (
+            id TEXT PRIMARY KEY,
+            display_name TEXT NOT NULL,
+            latitude REAL NOT NULL,
+            longitude REAL NOT NULL,
+            address TEXT,
+            place_type TEXT,
+            category TEXT,
+            is_favorite INTEGER NOT NULL DEFAULT 0,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER
+          )
+        ''');
+        debugPrint('✅ V17 Migration complete: saved locations table created');
       }
 
       debugPrint('✅ Database upgrade completed successfully');
@@ -4837,6 +4875,72 @@ class DatabaseService {
       debugPrint('Deleted custom north reference: $id');
     } catch (e) {
       debugPrint('Error deleting custom north reference: $e');
+      rethrow;
+    }
+  }
+
+  /// Saved Location Operations
+
+  /// Get all saved locations, favorites first, then by recency.
+  Future<List<SavedLocation>> getSavedLocations() async {
+    try {
+      final Database db = await database;
+      final List<Map<String, dynamic>> maps = await db.query(
+        _savedLocationsTable,
+        orderBy: 'is_favorite DESC, created_at DESC',
+      );
+      return maps.map((map) => SavedLocation.fromMap(map)).toList();
+    } catch (e) {
+      debugPrint('Error getting saved locations: $e');
+      rethrow;
+    }
+  }
+
+  /// Insert a new saved location.
+  Future<void> insertSavedLocation(SavedLocation location) async {
+    try {
+      final Database db = await database;
+      await db.insert(
+        _savedLocationsTable,
+        location.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+      debugPrint('Inserted saved location: ${location.displayName}');
+    } catch (e) {
+      debugPrint('Error inserting saved location: $e');
+      rethrow;
+    }
+  }
+
+  /// Update a saved location.
+  Future<void> updateSavedLocation(SavedLocation location) async {
+    try {
+      final Database db = await database;
+      await db.update(
+        _savedLocationsTable,
+        location.toMap(),
+        where: 'id = ?',
+        whereArgs: [location.id],
+      );
+      debugPrint('Updated saved location: ${location.displayName}');
+    } catch (e) {
+      debugPrint('Error updating saved location: $e');
+      rethrow;
+    }
+  }
+
+  /// Delete a saved location by ID.
+  Future<void> deleteSavedLocation(String id) async {
+    try {
+      final Database db = await database;
+      await db.delete(
+        _savedLocationsTable,
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+      debugPrint('Deleted saved location: $id');
+    } catch (e) {
+      debugPrint('Error deleting saved location: $e');
       rethrow;
     }
   }

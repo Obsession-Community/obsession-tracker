@@ -6,6 +6,8 @@ import 'package:obsession_tracker/core/models/custom_north_reference.dart';
 import 'package:obsession_tracker/core/providers/custom_north_provider.dart';
 import 'package:obsession_tracker/core/providers/location_provider.dart';
 import 'package:obsession_tracker/core/providers/map_search_provider.dart';
+import 'package:obsession_tracker/core/providers/saved_location_provider.dart';
+import 'package:obsession_tracker/core/models/saved_location.dart';
 import 'package:obsession_tracker/core/services/map_search_service.dart';
 
 /// Bottom sheet for managing saved custom North references.
@@ -205,12 +207,14 @@ class _CustomNorthManagerState extends ConsumerState<CustomNorthManager> {
     final theme = Theme.of(context);
     final searchService = ref.read(mapSearchServiceProvider);
     final pos = ref.read(locationProvider).currentPosition;
+    final savedLocs = ref.read(savedLocationProvider).locations;
 
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => _AddCustomNorthDialog(
         theme: theme,
         searchService: searchService,
+        savedLocations: savedLocs,
         currentLat: pos?.latitude,
         currentLon: pos?.longitude,
         onSave: (name, lat, lon) {
@@ -257,6 +261,7 @@ class _AddCustomNorthDialog extends StatefulWidget {
     required this.theme,
     required this.searchService,
     required this.onSave,
+    this.savedLocations = const [],
     this.currentLat,
     this.currentLon,
   });
@@ -264,6 +269,7 @@ class _AddCustomNorthDialog extends StatefulWidget {
   final ThemeData theme;
   final MapSearchService searchService;
   final void Function(String name, double lat, double lon) onSave;
+  final List<SavedLocation> savedLocations;
   final double? currentLat;
   final double? currentLon;
 
@@ -317,6 +323,7 @@ class _AddCustomNorthDialogState extends State<_AddCustomNorthDialog> {
           query.trim(),
           proximityLat: widget.currentLat,
           proximityLon: widget.currentLon,
+          savedLocations: widget.savedLocations,
         );
         if (mounted) {
           setState(() {
