@@ -504,11 +504,13 @@ class MapSearchService {
       // Generate session token for billing (groups suggest + retrieve calls)
       // Store it so retrieveCoordinates can use the same token
       _currentSessionToken = const Uuid().v4();
-      final encodedQuery = Uri.encodeComponent(query);
 
       // Build suggest query parameters
+      // Note: Do NOT pre-encode the query — Uri.replace(queryParameters:)
+      // handles encoding automatically. Double-encoding breaks searches
+      // with commas/spaces (e.g., "Polaris, MT" → "Polaris%252C%2520MT").
       final params = <String, String>{
-        'q': encodedQuery,
+        'q': query,
         'access_token': mapboxAccessToken,
         'session_token': _currentSessionToken!,
         'limit': limit.toString(),
