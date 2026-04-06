@@ -119,13 +119,6 @@ obsession-tracker/
 │   │   ├── tracking/   # GPS tracking
 │   │   └── waypoints/  # Waypoint management
 │   └── main.dart       # App entry point
-├── server/              # Node.js API (tracker-api)
-│   ├── src/            # TypeScript source code
-│   │   ├── routes/     # API endpoints (devices, subscriptions, downloads)
-│   │   ├── db/         # Database schema and queries
-│   │   └── middleware/ # Auth and validation middleware
-│   ├── Dockerfile      # Container configuration
-│   └── package.json    # Node dependencies
 ├── test/               # Flutter unit and widget tests
 └── integration_test/   # Flutter integration tests
 ```
@@ -160,7 +153,7 @@ obsession-tracker/
 
 **Backend API (tracker-api)**:
 
-- See `server/README.md` for complete tracker-api documentation
+- The backend API lives in a separate private repository: `obsession-api`
 - Node.js/TypeScript REST API running on DigitalOcean Droplet
 - Handles device registration, subscription validation, and download
   authentication
@@ -518,8 +511,6 @@ The project has completed Milestones 1-8:
 - `lib/core/models/land_ownership.dart`: Land ownership and property rights data
   models
 - `test/test_runner.dart`: Comprehensive test suite runner
-- `server/`: Node.js API server (tracker-api) for device registration and
-  subscriptions
 
 ## Premium Downloads with NHP
 
@@ -626,8 +617,8 @@ subscription status.
 ### Documentation
 
 - **Complete NHP system docs**: `infrastructure/README-NHP-DOWNLOADS.md`
-- **tracker-api docs**: `server/README.md`
-- **Deployment**: `.github/workflows/deploy-droplet.yml`
+- **tracker-api docs**: See the `obsession-api` repository
+- **Deployment**: Mobile app via fastlane; API via `obsession-api` repo CI/CD
 
 ## Documentation Maintenance
 

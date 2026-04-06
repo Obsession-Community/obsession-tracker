@@ -248,15 +248,4 @@ Icon?
 *.bak
 *.backup
 *~
-# Historical map test data and processing workspace
-server/scripts/test_downloads/
-server/scripts/test_output/
-server/scripts/test_output_sample/
-server/scripts/test_sample/
-server/scripts/usgs_downloads/
-server/scripts/usgs_test/
-server/scripts/historical_maps_workspace/
-server/scripts/source_data/*.csv
-server/scripts/source_data/*.gz
-!server/scripts/source_data/test_cell_towers.csv
 .worktrees
