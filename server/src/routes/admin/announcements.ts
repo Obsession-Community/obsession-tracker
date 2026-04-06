@@ -87,16 +87,23 @@ adminAnnouncementsRouter.get('/:id', (req: Request, res: Response) => {
  */
 adminAnnouncementsRouter.post('/', (req: Request, res: Response) => {
   const adminUser = req.adminUser!;
+  // Accept both camelCase (from admin portal) and snake_case field names
   const body = req.body as {
     title: string;
     body?: string;
     announcement_type?: string;
+    announcementType?: string;
     priority?: string;
     platforms?: string[];
+    targetPlatforms?: string[];
     min_app_version?: string;
+    targetMinVersion?: string;
     published_at?: string;
+    publishedAt?: string;
     expires_at?: string;
+    expiresAt?: string;
     is_active?: boolean;
+    isActive?: boolean;
   };
 
   if (!body.title) {
@@ -106,6 +113,13 @@ adminAnnouncementsRouter.post('/', (req: Request, res: Response) => {
 
   const db = getDb();
   const id = uuidv4();
+
+  const announcementType = body.announcement_type ?? body.announcementType ?? 'info';
+  const platforms = body.platforms ?? body.targetPlatforms;
+  const minAppVersion = body.min_app_version ?? body.targetMinVersion;
+  const publishedAt = body.published_at ?? body.publishedAt;
+  const expiresAt = body.expires_at ?? body.expiresAt;
+  const isActive = body.is_active ?? body.isActive;
 
   db.prepare(`
     INSERT INTO announcements (
@@ -117,13 +131,13 @@ adminAnnouncementsRouter.post('/', (req: Request, res: Response) => {
     id,
     body.title,
     body.body || null,
-    body.announcement_type || 'info',
+    announcementType,
     body.priority || 'normal',
-    body.platforms ? JSON.stringify(body.platforms) : null,
-    body.min_app_version || null,
-    body.published_at || null,
-    body.expires_at || null,
-    body.is_active !== false ? 1 : 0,
+    platforms ? JSON.stringify(platforms) : null,
+    minAppVersion || null,
+    publishedAt || null,
+    expiresAt || null,
+    isActive !== false ? 1 : 0,
     adminUser.id
   );
 
@@ -136,16 +150,23 @@ adminAnnouncementsRouter.post('/', (req: Request, res: Response) => {
  */
 adminAnnouncementsRouter.put('/:id', (req: Request, res: Response) => {
   const id = req.params.id;
+  // Accept both camelCase (from admin portal) and snake_case field names
   const body = req.body as {
     title?: string;
     body?: string;
     announcement_type?: string;
+    announcementType?: string;
     priority?: string;
     platforms?: string[];
+    targetPlatforms?: string[];
     min_app_version?: string;
+    targetMinVersion?: string;
     published_at?: string;
+    publishedAt?: string;
     expires_at?: string;
+    expiresAt?: string;
     is_active?: boolean;
+    isActive?: boolean;
   };
 
   const db = getDb();
@@ -158,8 +179,16 @@ adminAnnouncementsRouter.put('/:id', (req: Request, res: Response) => {
     return;
   }
 
+  // Normalize camelCase to snake_case
+  const announcementType = body.announcement_type ?? body.announcementType;
+  const platforms = body.platforms ?? body.targetPlatforms;
+  const minAppVersion = body.min_app_version ?? body.targetMinVersion;
+  const publishedAt = body.published_at ?? body.publishedAt;
+  const expiresAt = body.expires_at ?? body.expiresAt;
+  const isActive = body.is_active ?? body.isActive;
+
   // Build update query dynamically
-  const updates: string[] = ['updated_at = datetime("now")'];
+  const updates: string[] = ["updated_at = datetime('now')"];
   const params: unknown[] = [];
 
   if (body.title !== undefined) {
@@ -170,33 +199,33 @@ adminAnnouncementsRouter.put('/:id', (req: Request, res: Response) => {
     updates.push('body = ?');
     params.push(body.body);
   }
-  if (body.announcement_type !== undefined) {
+  if (announcementType !== undefined) {
     updates.push('announcement_type = ?');
-    params.push(body.announcement_type);
+    params.push(announcementType);
   }
   if (body.priority !== undefined) {
     updates.push('priority = ?');
     params.push(body.priority);
   }
-  if (body.platforms !== undefined) {
+  if (platforms !== undefined) {
     updates.push('platforms = ?');
-    params.push(JSON.stringify(body.platforms));
+    params.push(JSON.stringify(platforms));
   }
-  if (body.min_app_version !== undefined) {
+  if (minAppVersion !== undefined) {
     updates.push('min_app_version = ?');
-    params.push(body.min_app_version);
+    params.push(minAppVersion);
   }
-  if (body.published_at !== undefined) {
+  if (publishedAt !== undefined) {
     updates.push('published_at = ?');
-    params.push(body.published_at);
+    params.push(publishedAt);
   }
-  if (body.expires_at !== undefined) {
+  if (expiresAt !== undefined) {
     updates.push('expires_at = ?');
-    params.push(body.expires_at);
+    params.push(expiresAt);
   }
-  if (body.is_active !== undefined) {
+  if (isActive !== undefined) {
     updates.push('is_active = ?');
-    params.push(body.is_active ? 1 : 0);
+    params.push(isActive ? 1 : 0);
   }
 
   params.push(id);
