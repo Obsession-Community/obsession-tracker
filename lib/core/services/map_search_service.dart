@@ -490,7 +490,7 @@ class MapSearchService {
         'session_token': _currentSessionToken!,
         'limit': limit.toString(),
         'country': 'US',
-        'types': 'poi,place,address',
+        'types': 'poi,place,address,locality,neighborhood,region',
         'language': 'en',
       };
 
