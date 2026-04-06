@@ -295,6 +295,12 @@ class _AddCustomNorthDialogState extends State<_AddCustomNorthDialog> {
       _latController.text = widget.currentLat!.toStringAsFixed(6);
       _lonController.text = widget.currentLon!.toStringAsFixed(6);
     }
+    // Show saved locations immediately on open
+    if (widget.savedLocations.isNotEmpty) {
+      _searchResults = widget.savedLocations
+          .map((loc) => loc.toSearchResult())
+          .toList();
+    }
   }
 
   @override
@@ -309,6 +315,16 @@ class _AddCustomNorthDialogState extends State<_AddCustomNorthDialog> {
 
   void _onSearchChanged(String query) {
     _debounce?.cancel();
+    if (query.trim().isEmpty) {
+      // Show saved locations when search is empty
+      setState(() {
+        _searchResults = widget.savedLocations
+            .map((loc) => loc.toSearchResult())
+            .toList();
+        _isSearching = false;
+      });
+      return;
+    }
     if (query.trim().length < 2) {
       setState(() {
         _searchResults = [];
@@ -419,10 +435,11 @@ class _AddCustomNorthDialogState extends State<_AddCustomNorthDialog> {
                           const Divider(height: 1),
                       itemBuilder: (_, index) {
                         final r = _searchResults[index];
+                        final isSaved = r.placeType == 'saved_location';
                         return ListTile(
                           dense: true,
                           leading: Icon(
-                            Icons.place,
+                            isSaved ? Icons.bookmark : Icons.place,
                             size: 20,
                             color: widget.theme.colorScheme.primary,
                           ),
