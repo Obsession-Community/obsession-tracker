@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:obsession_tracker/core/models/historical_place.dart';
+import 'package:obsession_tracker/core/models/saved_location.dart';
 import 'package:obsession_tracker/core/models/trail.dart';
 import 'package:obsession_tracker/core/services/bff_mapping_service.dart';
 import 'package:obsession_tracker/core/services/offline_cache_service.dart';
@@ -314,6 +315,7 @@ class MapSearchService {
     double? westBound,
     int limit = 5,
     bool searchOnlineTrails = false, // Only search BFF if explicitly requested
+    List<SavedLocation>? savedLocations,
   }) async {
     if (query.isEmpty) return [];
 
@@ -322,6 +324,22 @@ class MapSearchService {
     if (coordResult != null) {
       return [coordResult];
     }
+
+    // Filter saved locations matching query (instant, offline)
+    final savedResults = <MapSearchResult>[];
+    if (savedLocations != null && savedLocations.isNotEmpty) {
+      final queryLower = query.toLowerCase();
+      savedResults.addAll(
+        savedLocations
+            .where((loc) =>
+                loc.displayName.toLowerCase().contains(queryLower) ||
+                (loc.address?.toLowerCase().contains(queryLower) ?? false))
+            .map((loc) => loc.toSearchResult()),
+      );
+    }
+    final savedNames = savedResults
+        .map((r) => r.displayName.toLowerCase())
+        .toSet();
 
     // Search places, trails, and historical places concurrently
     final results = await Future.wait<List<MapSearchResult>>([
@@ -350,12 +368,17 @@ class MapSearchService {
     final trailResults = results[1];
     final historicalResults = results[2];
 
-    // Combine results: historical places first (treasure hunting focus),
-    // then trails, then general places
+    // De-duplicate: skip API results already in saved locations
+    bool notDuplicate(MapSearchResult r) =>
+        !savedNames.contains(r.displayName.toLowerCase());
+
+    // Combine results: saved locations first, then historical,
+    // trails, and general places
     final combined = <MapSearchResult>[
-      ...historicalResults,
-      ...trailResults,
-      ...placeResults,
+      ...savedResults,
+      ...historicalResults.where(notDuplicate),
+      ...trailResults.where(notDuplicate),
+      ...placeResults.where(notDuplicate),
     ];
 
     // Limit total results
