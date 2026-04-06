@@ -11,4 +11,14 @@ New: Custom North Reference (Polaris Mode)
 - Real-time bearing and distance to your custom North target
 - Perfect for treasure hunts that use landmark-based navigation
 
+New: Saved Locations
+- Bookmark any search result for instant offline access
+- Saved locations appear first in all search results
+- Manage favorites from Your Journey menu
+- Reduces API usage and works without internet
+
+New: Place Search in Compass
+- Search for cities and places by name when setting custom North
+- Type "Polaris, MT" to find and select locations quickly
+
 Your data stays on your device. We don't track where you explore.

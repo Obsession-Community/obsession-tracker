@@ -1,14 +1,20 @@
 What's new in v2.3.0:
 
 New: Full-Page Compass Tool
-- Beautiful full-screen compass from Your Journey menu
+- Full-screen compass from Your Journey menu
 - Real-time magnetic heading with animated compass rose
-- Bearing display in degrees with cardinal direction
 
 New: Custom North Reference (Polaris Mode)
 - Set any GPS coordinate as your "North" reference
 - Save multiple named references for different hunts
 - Real-time bearing and distance to custom North target
-- Perfect for treasure hunts with landmark-based navigation
+
+New: Saved Locations
+- Bookmark search results for instant offline access
+- Saved locations appear first across all search UIs
+- Manage favorites from Your Journey menu
+
+New: Place Search in Compass
+- Search cities and places by name when setting custom North
 
 Your data stays on your device.
