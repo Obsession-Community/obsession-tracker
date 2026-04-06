@@ -24,6 +24,7 @@ import 'package:obsession_tracker/features/settings/presentation/pages/data_sour
 import 'package:obsession_tracker/features/settings/presentation/pages/general_settings_page.dart';
 import 'package:obsession_tracker/features/settings/presentation/pages/security_settings_page.dart';
 import 'package:obsession_tracker/features/settings/presentation/pages/subscription_settings_page.dart';
+import 'package:obsession_tracker/features/settings/presentation/pages/saved_locations_page.dart';
 import 'package:obsession_tracker/features/settings/presentation/pages/sun_moon_page.dart';
 import 'package:obsession_tracker/features/settings/presentation/pages/tracking_settings_page.dart';
 import 'package:obsession_tracker/features/settings/presentation/widgets/announcements_card.dart';
@@ -357,6 +358,14 @@ class _AdaptiveHomePageState extends ConsumerState<AdaptiveHomePage> {
             subtitle: const Text('Full-page compass with custom North'),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => _navigateToPage(context, const CompassFullPage()),
+          ),
+          ListTile(
+            leading: const Icon(Icons.bookmark),
+            title: const Text('Saved Locations'),
+            subtitle: const Text('Manage your saved search locations'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () =>
+                _navigateToPage(context, const SavedLocationsPage()),
           ),
           ListTile(
             leading: const Icon(Icons.wb_twilight),
