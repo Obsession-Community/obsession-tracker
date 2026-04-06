@@ -70,7 +70,7 @@ jobs:
 
     - name: TruffleHog Secret Scan (PR)
       if: github.event_name == 'pull_request'
-      uses: trufflesecurity/trufflehog@v3.94.1
+      uses: trufflesecurity/trufflehog@v3.94.2
       with:
         path: ./
         base: ${{ github.event.pull_request.base.sha }}
@@ -79,7 +79,7 @@ jobs:
 
     - name: TruffleHog Secret Scan (Push)
       if: github.event_name == 'push' && github.event.before != '0000000000000000000000000000000000000000'
-      uses: trufflesecurity/trufflehog@v3.94.1
+      uses: trufflesecurity/trufflehog@v3.94.2
       continue-on-error: true  # Don't fail if base/head are same (rapid pushes)
       with:
         path: ./
