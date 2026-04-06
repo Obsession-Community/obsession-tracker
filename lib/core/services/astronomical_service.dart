@@ -210,23 +210,31 @@ class AstronomicalService {
     );
   }
 
-  /// Convert minutes from midnight to DateTime
+  /// Convert minutes from midnight UTC to local DateTime.
+  ///
+  /// The solar calculations produce minutes-from-midnight in UTC
+  /// (via the longitude correction `-4 * longitude`). We create a
+  /// UTC DateTime, then convert to local so times display correctly
+  /// regardless of timezone.
+  ///
+  /// Minutes may exceed 1440 (next day) or be negative (previous day)
+  /// for western/eastern longitudes — this is normal and handled by
+  /// DateTime's overflow arithmetic.
   DateTime? _minutesToDateTime(double minutes, DateTime referenceDate) {
-    if (minutes < 0 || minutes >= 1440) {
-      return null;
-    }
-    final hours = minutes ~/ 60;
-    final mins = (minutes % 60).floor();
-    final secs = ((minutes % 1) * 60).round();
+    // Normalize to handle day overflow/underflow
+    final totalMinutes = minutes.round();
+    final hours = totalMinutes ~/ 60;
+    final mins = totalMinutes % 60;
 
-    return DateTime(
+    // Create as UTC (the calculation is in UTC due to longitude correction),
+    // then convert to local time for display
+    return DateTime.utc(
       referenceDate.year,
       referenceDate.month,
       referenceDate.day,
       hours,
       mins,
-      secs,
-    );
+    ).toLocal();
   }
 
   // ============================================================
