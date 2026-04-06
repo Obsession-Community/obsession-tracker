@@ -139,12 +139,9 @@ flutter:
     # Desktop map WebView assets (Mapbox GL JS)
     - assets/web/
 
-    # Demo hunt assets for screenshots (Beyond the Maps Edge)
-    - fastlane/btme/
-
-    # Screenshot test fixtures (state data for Android tests)
-    # These are only used during integration tests, not in release builds
-    - integration_test/fixtures/states/UT/
+    # NOTE: fastlane/btme/ and integration_test/fixtures/ are NOT listed here.
+    # They are only needed during screenshot generation and integration tests,
+    # not in production builds. Including them added ~60MB to the app bundle.
 
   # fonts:
   # Primary app font for readability (commented out until fonts are added)
