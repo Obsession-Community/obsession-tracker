@@ -43,7 +43,7 @@ dependencies:
   permission_handler: ^12.0.1
   # photo_manager removed - was unused and triggered NSPhotoLibraryUsageDescription requirement
   sensors_plus: ^7.0.0
-  device_info_plus: ^12.2.0
+  device_info_plus: ^12.4.0
   package_info_plus: ^9.0.0
   battery_plus: ^7.0.0
   sqflite_sqlcipher: ^3.0.2
